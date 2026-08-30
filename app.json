@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "id": "gar-vibe-remote",
+  "build": {"owner": "target-capsule"},
+  "runtime": {
+    "entrypoint": null,
+    "install_dir": "firmware"
+  }
+}
