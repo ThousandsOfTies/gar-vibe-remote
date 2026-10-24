@@ -11,6 +11,15 @@
 #define HAS_M5UNIFIED 0
 #endif
 
+#ifdef VIBE_TOUCH_UI_ENABLED
+// Optional frontend hooks: products bind shared touch UI to their own hardware.
+void vibeTouchBegin();
+void vibeTouchDraw();
+void vibeTouchPoll();
+void vibeTouchReceive(const uint8_t* payload, size_t length);
+void vibeTouchConnection(bool connected);
+#endif
+
 #ifndef VIBE_WIFI_SSID
 #define VIBE_WIFI_SSID ""
 #endif
@@ -560,6 +569,10 @@ void drawFooter(int width) {
 }
 
 void drawUi() {
+#ifdef VIBE_TOUCH_UI_ENABLED
+  vibeTouchDraw();
+  return;
+#endif
 #if HAS_M5UNIFIED
   const int width = M5.Display.width();
   const String displayStatus = deviceUiActive ? deviceUiState : agentStatus;
@@ -845,6 +858,9 @@ void applyState(JsonDocument& doc) {
 }
 
 void handleJson(const uint8_t* payload, size_t length) {
+#ifdef VIBE_TOUCH_UI_ENABLED
+  vibeTouchReceive(payload, length);
+#endif
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
@@ -869,6 +885,9 @@ void handleJson(const uint8_t* payload, size_t length) {
 void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
+#ifdef VIBE_TOUCH_UI_ENABLED
+      vibeTouchConnection(true);
+#endif
       wsReady = true;
       wsPhase = "online";
       displayDirty = true;
@@ -876,6 +895,9 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
       sendHello();
       break;
     case WStype_DISCONNECTED:
+#ifdef VIBE_TOUCH_UI_ENABLED
+      vibeTouchConnection(false);
+#endif
       wsReady = false;
       if (wsPhase != "reconn") {
         wsPhase = wifiReady ? "off" : "wifi";
@@ -1069,6 +1091,10 @@ void pollSerial() {
 }
 
 void pollButtons() {
+#ifdef VIBE_TOUCH_UI_ENABLED
+  vibeTouchPoll();
+  return;
+#endif
   const unsigned long now = millis();
   const bool directA = digitalRead(kButtonAGpio) == LOW;
   const bool directB = digitalRead(kButtonBGpio) == LOW;
@@ -1163,6 +1189,9 @@ void setup() {
   M5.Display.setRotation(0);
   M5.Display.setBrightness(100);
   initTheme();
+#endif
+#ifdef VIBE_TOUCH_UI_ENABLED
+  vibeTouchBegin();
 #endif
 
   mark("vibe minimal boot");

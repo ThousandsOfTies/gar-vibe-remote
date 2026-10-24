@@ -10,6 +10,7 @@ test('normalizeDeviceUi trims and limits device UI payloads', () => {
       id: ` ${'x'.repeat(60)} `,
       title: ` ${'title'.repeat(20)} `,
       state: 'waiting',
+      stateLabel: ` ${'状態'.repeat(30)} `,
       mode: 'menu',
       selected: 2,
       message: ` ${'message'.repeat(30)} `,
@@ -33,6 +34,7 @@ test('normalizeDeviceUi trims and limits device UI payloads', () => {
 
   assert.equal(ui?.id.length, 40);
   assert.equal(ui?.title?.length, 32);
+  assert.equal(ui?.stateLabel, '状態'.repeat(20));
   assert.equal(ui?.message?.length, 120);
   assert.equal(ui?.mode, 'menu');
   assert.equal(ui?.selected, 2);

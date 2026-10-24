@@ -117,8 +117,17 @@ export class RemoteServer implements vscode.Disposable {
     }
 
     if (msg.type === 'ping') {
+      const wasAuthenticated = this.authenticatedClients.has(client);
       if (!this.authenticate(client, msg.token)) {
         return;
+      }
+      // A fast host-side restart can reopen the Bluetooth COM port before the
+      // device observes a disconnect. In that case the device keeps sending
+      // pings but does not send a second hello. Acknowledge the first valid
+      // ping so the device can restore its authenticated UI state.
+      if (!wasAuthenticated) {
+        this.sendAck(client, true);
+        this.log(`authenticated by ping: ${client.label}`);
       }
       this.sendState(client, this.buildState());
       return;

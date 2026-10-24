@@ -4,6 +4,7 @@ import type { OutboundMessage } from './protocol';
 
 interface SerialPortLike {
   write(data: string): void;
+  open(callback?: (err?: Error | null) => void): void;
   close(callback?: (err?: Error | null) => void): void;
   on(event: 'open', listener: () => void): this;
   on(event: 'data', listener: (data: Buffer) => void): this;
@@ -68,12 +69,26 @@ export class SerialSppBridge implements vscode.Disposable {
     this.port = new SerialPort({
       path: this.opts.path,
       baudRate: this.opts.baudRate,
-      autoOpen: true
+      autoOpen: false
     });
-    this.port.on('open', () => this.log(`SPP serial opened: ${this.opts.path}`));
     this.port.on('data', (data) => this.handleData(data));
     this.port.on('error', (err) => this.log(`SPP serial error: ${err.message}`));
     this.port.on('close', () => this.log(`SPP serial closed: ${this.opts.path}`));
+    this.port.on('open', () => {
+      this.log(`SPP serial opened: ${this.opts.path}`);
+
+      // Opening a Windows Bluetooth virtual COM port is not always enough to
+      // start the underlying RFCOMM data session.  An empty line is ignored by
+      // the device protocol, but forces the first write so the ESP32 can notice
+      // the client and send its hello message.
+      this.port?.write('\n');
+      this.log('SPP serial connection probe sent');
+    });
+    this.port.open((err) => {
+      if (err) {
+        this.log(`SPP serial open failed: ${err.message}`);
+      }
+    });
   }
 
   dispose(): void {
@@ -105,6 +120,7 @@ export class SerialSppBridge implements vscode.Disposable {
       const line = this.rx.slice(0, newline).trim();
       this.rx = this.rx.slice(newline + 1);
       if (line && this.client) {
+        this.log(`SPP serial received: ${messageType(line)}`);
         this.server.receive(this.client, line);
       }
     }
@@ -112,5 +128,14 @@ export class SerialSppBridge implements vscode.Disposable {
 
   private log(line: string): void {
     this.output.appendLine(`[${new Date().toLocaleTimeString()}] ${line}`);
+  }
+}
+
+function messageType(line: string): string {
+  try {
+    const value = JSON.parse(line) as { type?: unknown };
+    return typeof value.type === 'string' && value.type ? value.type : 'JSON';
+  } catch {
+    return 'non-JSON';
   }
 }

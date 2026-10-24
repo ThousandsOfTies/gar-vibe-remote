@@ -173,7 +173,12 @@ function startSerialBridge() {
 function connectSerialUpstream() {
   serialUpstream?.close();
   serialUpstream = new WebSocket(upstreamUrl);
-  serialUpstream.on('open', () => log(`SPP upstream connected ${upstreamUrl}`));
+  serialUpstream.on('open', () => {
+    log(`SPP upstream connected ${upstreamUrl}`);
+    // Windows may defer the RFCOMM session until the first write. Probe only
+    // after the upstream is ready so the watch's hello can be forwarded.
+    if (serial?.writable) serial.write('\n');
+  });
   serialUpstream.on('message', (data) => {
     if (serial?.writable) {
       serial.write(`${data.toString()}\n`);

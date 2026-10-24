@@ -197,6 +197,7 @@
     "test": "node --test --import tsx test/*.test.ts",
     "ci": "npm run compile && npm run typecheck && npm run lint && npm run format:check && npm run test && npm audit --audit-level=high",
     "local:bridge": "node scripts/local-bridge.js",
+    "codex:bridge": "node dist/codexBridge.js",
     "smoke:protocol": "node scripts/smoke-protocol.js",
     "virtual:device": "node scripts/virtual-device.js",
     "watch": "node esbuild.js --watch",

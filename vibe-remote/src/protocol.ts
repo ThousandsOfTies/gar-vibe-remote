@@ -41,6 +41,8 @@ export interface DeviceUiSpec {
   id: string;
   title?: string;
   state?: DeviceUiState;
+  /** 状態欄のラベル。未指定はstateの標準表示、空文字列は状態欄を省略する。 */
+  stateLabel?: string;
   mode?: DeviceUiMode;
   selected?: number;
   message?: string;
@@ -120,6 +122,15 @@ export interface AgentStatusSnapshot {
 /** 拡張 → 状態ビューア：状態通知 */
 export interface StateMessage {
   type: 'state';
+  /** 現在監視するセッション。入力先の切り替えや他セッションの承認を意味しない。 */
+  session?: { id: string; name: string };
+  /** Codexの更新元と鮮度。通信の接続状態とは別に扱う。 */
+  monitor?: {
+    mode: 'waiting' | 'hooks' | 'test' | 'snapshot';
+    fresh: boolean;
+    observedAt?: number;
+    lastEvent?: string;
+  };
   chat: ChatState;
   /** 承認ブローカー/外部制御から自己申告された状態 */
   agent?: AgentStatusSnapshot;

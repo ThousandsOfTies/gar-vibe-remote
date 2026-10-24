@@ -29,6 +29,7 @@ export function normalizeDeviceUi(
     id,
     title: ui.title?.trim().slice(0, 32) || undefined,
     state,
+    stateLabel: ui.stateLabel?.trim().slice(0, 40) || undefined,
     mode,
     selected,
     message: ui.message?.trim().slice(0, 120) || undefined,
