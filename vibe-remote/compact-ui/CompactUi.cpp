@@ -206,6 +206,9 @@ bool CompactUi::receive(const char* json) {
 void CompactUi::hardware(bool powered,bool connected,int battery) {
   refresh();
   if(powered_!=powered || connected_!=connected) { invalidate();outgoing_.clear();listOpen_=false; }
+  if(connected_ && !connected)for(auto& s:sessions_)if(!s.pending.empty() && !s.acknowledged) {
+    s.pending.clear();s.error="接続が切れました\nPCで確認してください";
+  }
   powered_=powered;connected_=connected;battery_=std::clamp(battery,0,100);dirty_=true;refresh();
 }
 void CompactUi::button(char key,int phase) {
