@@ -1,157 +1,316 @@
 #include "CompactUi.h"
 #include <algorithm>
 #include <cstring>
+#include <set>
 LV_FONT_DECLARE(vibe_jp_16);
 
 namespace vibe {
 namespace {
-std::string text(JsonVariantConst v, const char* fallback="") { return v.is<const char*>() ? v.as<const char*>() : fallback; }
-uint32_t frame(const std::string& s) { return s=="running" ? 0x238a43 : (s=="waiting" || s=="failed") ? 0x750e23 : 0x4d5552; }
-const char* stateName(const std::string& s) { return s=="running" ? "実行中" : s=="waiting" ? "入力待ち" : s=="done" ? "完了" : s=="failed" ? "エラー" : "待機中"; }
+std::string text(JsonVariantConst v, const char* fallback="") {
+  return v.is<const char*>() ? v.as<const char*>() : fallback;
+}
+uint32_t frame(const std::string& status) {
+  return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x750e23 : 0x4d5552;
+}
+const char* icon(const std::string& status) {
+  return status=="waiting" ? "?" : status=="running" ? LV_SYMBOL_PLAY : status=="failed" ? LV_SYMBOL_WARNING : LV_SYMBOL_PAUSE;
+}
+const char* stateName(const std::string& status) {
+  return status=="running" ? "実行中" : status=="waiting" ? "入力待ち" : status=="done" ? "完了" : status=="failed" ? "エラー" : "待機中";
+}
+size_t charSize(const std::string& s, size_t i) {
+  const auto c=static_cast<unsigned char>(s[i]);
+  const size_t n=(c&0xe0)==0xc0 ? 2 : (c&0xf0)==0xe0 ? 3 : (c&0xf8)==0xf0 ? 4 : 1;
+  return std::min(n,s.size()-i);
+}
 std::string shorten(std::string s, int width) {
-  const auto fits=[width](const std::string& value){return _lv_txt_get_width(value.c_str(),value.size(),&vibe_jp_16,0,LV_TXT_FLAG_NONE)<=width;};
-  if (fits(s)) return s;
-  while (!s.empty()) {
-    size_t p=s.size()-1; while(p && (static_cast<unsigned char>(s[p])&0xc0)==0x80) --p;
-    s.resize(p); if(fits(s+"...")) return s+"...";
+  const auto fits=[width](const std::string& value) {
+    return _lv_txt_get_width(value.c_str(),value.size(),&vibe_jp_16,0,LV_TXT_FLAG_NONE)<=width;
+  };
+  if(fits(s))return s;
+  while(!s.empty()) {
+    size_t p=s.size()-1; while(p && (static_cast<unsigned char>(s[p])&0xc0)==0x80)--p;
+    s.resize(p); if(fits(s+"..."))return s+"...";
   }
   return "...";
 }
+std::string wrap(const std::string& message, int width) {
+  std::string out,line;
+  for(size_t i=0;i<message.size();) {
+    const auto ch=message.substr(i,charSize(message,i)); i+=ch.size();
+    if(ch=="\r")continue;
+    if(ch=="\n") { out+=line+'\n';line.clear();continue; }
+    const auto candidate=line+ch;
+    if(!line.empty() && _lv_txt_get_width(candidate.c_str(),candidate.size(),&vibe_jp_16,0,LV_TXT_FLAG_NONE)>width) {
+      out+=line+'\n'; line.clear();
+    }
+    line+=ch;
+  }
+  return out+line;
 }
-lv_obj_t* CompactUi::label(int x,int y,int w,const lv_font_t* font) {
-  auto* o=lv_label_create(root_,nullptr);
-  lv_label_set_long_mode(o,LV_LABEL_LONG_CROP); lv_obj_set_width(o,w); lv_obj_set_pos(o,x,y);
+void box(lv_obj_t* o, uint32_t bg, int border, uint32_t edge) {
+  lv_obj_set_style_local_bg_color(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(bg));
+  lv_obj_set_style_local_bg_opa(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_COVER);
+  lv_obj_set_style_local_border_color(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(edge));
+  lv_obj_set_style_local_border_width(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,border);
+  lv_obj_set_style_local_radius(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
+  lv_obj_set_style_local_pad_all(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
+  lv_obj_set_click(o,false);
+}
+}
+
+lv_obj_t* CompactUi::label(lv_obj_t* parent,int x,int y,int width,const lv_font_t* font) {
+  auto* o=lv_label_create(parent,nullptr);
+  lv_label_set_long_mode(o,LV_LABEL_LONG_CROP);lv_obj_set_width(o,width);lv_obj_set_pos(o,x,y);
   lv_obj_set_style_local_text_font(o,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,font);
   lv_obj_set_style_local_text_color(o,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0xe8ede7));
   lv_obj_set_style_local_text_line_space(o,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,0);
-  lv_obj_set_click(o,false); return o;
+  lv_obj_set_style_local_text_letter_space(o,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,0);
+  lv_obj_set_click(o,false);return o;
 }
 void CompactUi::begin() {
-  if(root_) return;
-  root_=lv_obj_create(nullptr,nullptr); lv_obj_set_size(root_,240,135);
-  lv_obj_set_style_local_bg_color(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x090e0d));
-  lv_obj_set_style_local_bg_opa(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_COVER);
-  lv_obj_set_style_local_radius(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
-  lv_obj_set_style_local_border_width(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,3);
-  icon_=label(9,9,19,&lv_font_montserrat_16);
-  name_=label(30,6,157,&vibe_jp_16); batteryLabel_=label(192,10,40,&lv_font_montserrat_12);
-  body_=label(10,34,220,&vibe_jp_16); lv_obj_set_height(body_,63);
-  footer_=label(10,108,190,&vibe_jp_16); counter_=label(199,113,34,&lv_font_montserrat_12);
-  choiceLabel_=label(12,41,215,&lv_font_montserrat_16); lv_label_set_align(choiceLabel_,LV_LABEL_ALIGN_CENTER);
-  progress_=lv_obj_create(root_,nullptr); lv_obj_set_pos(progress_,12,94); lv_obj_set_size(progress_,1,3);
-  lv_obj_set_style_local_border_width(progress_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
-  lv_obj_set_style_local_bg_color(progress_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x85b998));
-  lv_obj_set_style_local_bg_opa(progress_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_COVER);
-  lv_obj_set_click(progress_,false); lv_scr_load(root_); paginate(); refresh();
-}
-void CompactUi::paginate() {
-  pages_.clear(); std::string line, page; int lines=0;
-  const auto pushLine=[&](){ if(lines) page+='\n'; page+=line; line.clear(); if(++lines==3){pages_.push_back(page);page.clear();lines=0;} };
-  for(size_t i=0;i<message_.size();) {
-    size_t n=1; auto c=static_cast<unsigned char>(message_[i]);
-    if((c&0xe0)==0xc0)n=2;else if((c&0xf0)==0xe0)n=3;else if((c&0xf8)==0xf0)n=4;
-    n=std::min(n,message_.size()-i); const auto ch=message_.substr(i,n); i+=n;
-    if(ch=="\r")continue;
-    if(ch=="\n"){pushLine();continue;}
-    const auto candidate=line+ch;
-    if(!line.empty() && _lv_txt_get_width(candidate.c_str(),candidate.size(),&vibe_jp_16,0,LV_TXT_FLAG_NONE)>220) pushLine();
-    line+=ch;
+  if(root_)return;
+  root_=lv_obj_create(nullptr,nullptr);lv_obj_set_size(root_,135,240);box(root_,0x090e0d,3,0x4d5552);
+  icon_=label(root_,9,10,19,&lv_font_montserrat_16);
+  counter_=label(root_,37,12,51,&lv_font_montserrat_12);
+  batteryLabel_=label(root_,94,12,34,&lv_font_montserrat_12);
+  name_=label(root_,9,32,textWidth,&vibe_jp_16);
+  viewport_=lv_obj_create(root_,nullptr);lv_obj_set_pos(viewport_,9,textTop);lv_obj_set_size(viewport_,textWidth,fullHeight);box(viewport_,0x090e0d,0,0);
+  body_=label(viewport_,0,0,textWidth,&vibe_jp_16);
+  footer_=label(root_,9,216,textWidth,&vibe_jp_16);
+  for(int i=0;i<2;++i) {
+    optionRows_[i]=lv_obj_create(root_,nullptr);lv_obj_set_pos(optionRows_[i],9,158+i*30);lv_obj_set_size(optionRows_[i],textWidth,25);
+    optionLabels_[i]=label(optionRows_[i],5,2,textWidth-10,&vibe_jp_16);
   }
-  if(!line.empty())pushLine();
-  if(!page.empty())pages_.push_back(page);
-  if(pages_.empty())pages_.push_back("");
-  page_=std::min<int>(page_,pages_.size()-1);
+  for(int i=0;i<4;++i) {
+    listRows_[i]=lv_obj_create(root_,nullptr);lv_obj_set_pos(listRows_[i],9,60+i*37);lv_obj_set_size(listRows_[i],textWidth,32);
+    listIcons_[i]=label(listRows_[i],5,9,17,&lv_font_montserrat_16);
+    listLabels_[i]=label(listRows_[i],25,6,86,&vibe_jp_16);
+  }
+  lastTick_=lv_tick_get();lv_scr_load(root_);refresh();
+}
+CompactUi::Session* CompactUi::current() { return sessions_.empty() ? nullptr : &sessions_[selected_]; }
+const CompactUi::Session* CompactUi::current() const { return sessions_.empty() ? nullptr : &sessions_[selected_]; }
+int CompactUi::find(const std::string& id) const {
+  for(size_t i=0;i<sessions_.size();++i)if(sessions_[i].id==id)return i;
+  return -1;
+}
+bool CompactUi::hasOptions(const Session& s) const { return s.status=="waiting" && !s.uiId.empty() && !s.actions.empty() && s.pending.empty(); }
+bool CompactUi::canAnswer(const Session& s) const { return powered_ && connected_ && hasOptions(s); }
+int CompactUi::waitingCount() const {
+  return std::count_if(sessions_.begin(),sessions_.end(),[this](const Session& s){return hasOptions(s);});
+}
+bool CompactUi::parseSession(JsonObjectConst object,Session& s) const {
+  if(object.isNull())return false;
+  s.id=text(object["session"]["id"]);s.name=text(object["session"]["name"]);
+  if(s.id.empty() || s.id.size()>256 || s.name.size()>512)return false;
+  std::replace(s.name.begin(),s.name.end(),'\n',' ');std::replace(s.name.begin(),s.name.end(),'\r',' ');
+  const auto ui=object["ui"].as<JsonObjectConst>();s.uiId=text(ui["id"]);
+  s.status=s.uiId.empty()?text(object["agent"]["status"],"idle"):text(ui["state"],"waiting");
+  s.message=s.uiId.empty()?text(object["agent"]["message"],"操作を待っています"):text(ui["message"]);
+  if(s.uiId.size()>256 || s.message.size()>8192)return false;
+  std::set<std::string> ids;
+  if(!s.uiId.empty())for(auto a:ui["actions"].as<JsonArrayConst>()) {
+    Action action{text(a["id"]),text(a["label"]),text(a["button"])};
+    if(action.id.empty() || action.id.size()>256 || action.label.empty() || action.label.size()>128 ||
+       !ids.insert(action.id).second || s.actions.size()==maxActions)return false;
+    s.actions.push_back(action);
+  }
+  s.choice=0;
+  for(size_t i=0;i<s.actions.size();++i)if(s.actions[i].id=="no")s.choice=i;
+  s.wrapped=wrap(s.message,textWidth);
+  s.contentHeight=(1+std::count(s.wrapped.begin(),s.wrapped.end(),'\n'))*vibe_jp_16.line_height;
+  return s.contentHeight<=30000; // Keep every LVGL 7 coordinate inside int16_t.
+}
+bool CompactUi::merge(Session& next,const Session& old) {
+  bool same=next.uiId==old.uiId && next.status==old.status && next.message==old.message && next.actions.size()==old.actions.size();
+  for(size_t i=0;same && i<next.actions.size();++i)
+    same=next.actions[i].id==old.actions[i].id && next.actions[i].label==old.actions[i].label && next.actions[i].button==old.actions[i].button;
+  if(same) {
+    const auto name=next.name;next=old;next.name=name;
+  }
+  return same;
+}
+void CompactUi::cancel() { pressed_=0; }
+void CompactUi::invalidate() { cancel();++generation_; }
+void CompactUi::discardOutgoing(const std::string& sessionId) {
+  outgoing_.erase(std::remove_if(outgoing_.begin(),outgoing_.end(),[&](const Outgoing& item){return item.sessionId==sessionId;}),outgoing_.end());
 }
 bool CompactUi::receive(const char* json) {
   if(!json || std::strlen(json)>65536)return false;
-  JsonDocument d; if(deserializeJson(d,json))return false;
-  const auto type=text(d["type"]);
+  JsonDocument d;if(deserializeJson(d,json))return false;
+  refresh();const auto type=text(d["type"]);
   if(type=="ack") {
-    // Only a matching UI/action acknowledgement may resolve an in-flight answer.
-    if(pending_.empty() || text(d["uiId"])!=id_ || text(d["actionId"])!=pending_)return false;
-    if(d["ok"]==true){acknowledged_=true;error_.clear();}
-    else {pending_.clear();error_=text(d["error"],"送信できません。再確認してください");}
+    const int index=find(text(d["sessionId"]));if(index<0)return false;
+    auto& s=sessions_[index];
+    if(s.pending.empty() || text(d["uiId"])!=s.uiId || text(d["actionId"])!=s.pending || !d["ok"].is<bool>())return false;
+    if(d["ok"].as<bool>()) { s.acknowledged=true;s.error.clear(); }
+    else { s.pending.clear();s.error="送信エラー\n選び直してください"; }
+    dirty_=true;refresh();return true;
+  }
+  if(type=="sessions") {
+    const auto array=d["sessions"].as<JsonArrayConst>();
+    if(array.isNull() || array.size()>maxSessions)return false;
+    std::vector<Session> next;std::set<std::string> ids;
+    // Validate the entire authoritative snapshot before modifying live state.
+    for(auto item:array) {
+      Session s;if(!parseSession(item.as<JsonObjectConst>(),s) || !ids.insert(s.id).second)return false;
+      next.push_back(std::move(s));
+    }
+    const auto selectedId=current()?current()->id:"";
+    const auto focusId=listOpen_ && !sessions_.empty()?sessions_[listFocus_].id:selectedId;
+    bool changedSelected=false,changedList=next.size()!=sessions_.size();
+    for(size_t i=0;i<next.size();++i) {
+      const int old=find(next[i].id);
+      if(old>=0 && !merge(next[i],sessions_[old])) {
+        discardOutgoing(next[i].id);if(next[i].id==selectedId)changedSelected=true;
+      }
+      if(i>=sessions_.size() || sessions_[i].id!=next[i].id)changedList=true;
+    }
+    for(const auto& old:sessions_)if(!ids.count(old.id))discardOutgoing(old.id);
+    sessions_=std::move(next);
+    selected_=find(selectedId);if(selected_<0){selected_=0;changedSelected=true;}
+    listFocus_=find(focusId);if(listFocus_<0)listFocus_=selected_;
+    if(changedSelected || (listOpen_ && changedList))invalidate();
     dirty_=true;refresh();return true;
   }
   if(type!="state")return false;
-  const auto ui=d["ui"].as<JsonObjectConst>();
-  const auto id=text(ui["id"]), session=text(d["session"]["id"]);
-  const auto status=id.empty()?text(d["agent"]["status"],"idle"):text(ui["state"],"waiting");
-  const auto message=id.empty()?text(d["agent"]["message"],"操作を待っています"):text(ui["message"]);
-  std::vector<Action> actions;
-  for(auto a:ui["actions"].as<JsonArrayConst>()) {
-    if(actions.size()==2)break;
-    auto aid=text(a["id"]); if(!aid.empty())actions.push_back({aid,text(a["label"]),text(a["button"])});
+  Session next;if(!parseSession(d.as<JsonObjectConst>(),next))return false;
+  const int old=find(next.id);
+  if(old<0) {
+    if(sessions_.size()==maxSessions)return false;
+    if(listOpen_ || sessions_.empty())invalidate();
+    sessions_.push_back(std::move(next));
+  } else {
+    if(!merge(next,sessions_[old])) { discardOutgoing(next.id);if(old==selected_)invalidate(); }
+    sessions_[old]=std::move(next);
   }
-  bool changed=id!=id_ || session!=sessionId_ || status!=status_ || message!=message_ || actions.size()!=actions_.size();
-  for(size_t i=0;!changed && i<actions.size();++i)changed=actions[i].id!=actions_[i].id || actions[i].label!=actions_[i].label || actions[i].button!=actions_[i].button;
-  if(changed){cancel();++generation_;page_=0;answering_=false;choice_=actions.size()>1?1:0;pending_.clear();error_.clear();acknowledged_=false;outgoing_.clear();}
-  id_=id;sessionId_=session;sessionName_=text(d["session"]["name"]);
-  std::replace(sessionName_.begin(),sessionName_.end(),'\n',' '); std::replace(sessionName_.begin(),sessionName_.end(),'\r',' ');
-  status_=status;message_=message;actions_=actions;
-  if(changed)paginate();dirty_=true;refresh();return true;
+  dirty_=true;refresh();return true;
 }
-void CompactUi::cancel(){pressed_=0;holdStep_=-1;dirty_=true;}
 void CompactUi::hardware(bool powered,bool connected,int battery) {
-  if(powered_!=powered || connected_!=connected){cancel();++generation_;answering_=false;page_=0;outgoing_.clear();}
+  refresh();
+  if(powered_!=powered || connected_!=connected) { invalidate();outgoing_.clear();listOpen_=false; }
   powered_=powered;connected_=connected;battery_=std::clamp(battery,0,100);dirty_=true;refresh();
 }
-bool CompactUi::canAnswer()const{return powered_ && connected_ && status_=="waiting" && !id_.empty() && !actions_.empty() && pending_.empty();}
 void CompactUi::button(char key,int phase) {
-  if(phase<0){cancel();refresh();return;}
-  if(!powered_ || !connected_)return;
-  if(phase==1){
-    if(pressed_){cancel();refresh();return;}
-    pressed_=key;pressedAt_=lv_tick_get();pressGeneration_=generation_;dirty_=true;refresh();return;
+  refresh();
+  if(phase<0) { cancel();return; }
+  if(!powered_ || (key!='A' && key!='B' && key!='C'))return;
+  if(phase==1) {
+    if(pressed_){cancel();return;}
+    pressed_=key;pressedAt_=lv_tick_get();pressGeneration_=generation_;return;
   }
-  if(pressed_!=key || pressGeneration_!=generation_){cancel();return;}
-  const auto elapsed=lv_tick_elaps(pressedAt_);cancel();
-  if(key=='C'){answering_=false;page_=0;}
-  else if(pending_.empty() && answering_ && canAnswer()) {
-    if(key=='A')choice_=(choice_+1)%actions_.size();
-    else if(key=='B' && elapsed>=900){
-      pending_=actions_[choice_].id; JsonDocument d;
-      d["type"]="uiAction";d["uiId"]=id_;d["actionId"]=pending_;d["button"]=actions_[choice_].button;
-      serializeJson(d,outgoing_);acknowledged_=false;
+  if(pressed_!=key || pressGeneration_!=generation_) { cancel();return; }
+  const auto duration=lv_tick_elaps(pressedAt_);cancel();
+  // C is also the physical power switch; a long power gesture is not a focus step.
+  if(key=='C' && duration>=1000)return;
+  if(key=='B') {
+    listOpen_=!listOpen_;listFocus_=selected_;invalidate();
+  } else if(listOpen_) {
+    if(key=='C' && !sessions_.empty())listFocus_=(listFocus_+1)%sessions_.size();
+    if(key=='A' && !sessions_.empty()) { selected_=listFocus_;listOpen_=false;invalidate(); }
+  } else if(auto* s=current(); s && canAnswer(*s)) {
+    if(key=='C') { s->choice=(s->choice+1)%s->actions.size();s->error.clear(); }
+    if(key=='A') {
+      const auto& action=s->actions[s->choice];s->pending=action.id;s->acknowledged=false;s->error.clear();
+      JsonDocument d;d["type"]="uiAction";d["sessionId"]=s->id;d["uiId"]=s->uiId;d["actionId"]=action.id;d["button"]=action.button;
+      std::string value;serializeJson(d,value);outgoing_.push_back({s->id,std::move(value)});
     }
-  } else if(pending_.empty()) {
-    if(key=='A'){if(page_+1<(int)pages_.size())++page_;else if(canAnswer())answering_=true;}
-    if(key=='B' && page_>0)--page_;
   }
   dirty_=true;refresh();
 }
+void CompactUi::advanceScroll(uint32_t elapsed) {
+  auto* s=current();
+  if(!s || !powered_ || !connected_ || listOpen_ || pressed_ || !s->pending.empty() || !s->error.empty())return;
+  const int height=hasOptions(*s)?questionHeight:fullHeight;
+  const int maximum=std::max(0,s->contentHeight-height);
+  if(!maximum)return;
+  const uint64_t travel=(static_cast<uint64_t>(maximum)*1000+scrollSpeed-1)/scrollSpeed;
+  const uint64_t cycle=1800+travel+2800;
+  s->scrollTime=(s->scrollTime+elapsed)%cycle;
+  const int position=s->scrollTime<=1800?0:std::min<uint64_t>(maximum,(s->scrollTime-1800)*scrollSpeed/1000);
+  if(position!=s->scrollPixels) { s->scrollPixels=position;dirty_=true; }
+}
 void CompactUi::refresh() {
   if(!root_)return;
-  const int step=pressed_=='B' && answering_ && canAnswer()?std::min<uint32_t>(10,lv_tick_elaps(pressedAt_)/90):0;
-  if(step!=holdStep_){holdStep_=step;dirty_=true;}
-  if(!dirty_)return;dirty_=false;
-  lv_obj_set_style_local_border_color(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status_):0x4d5552));
-  lv_label_set_text(icon_,!connected_?LV_SYMBOL_CLOSE:status_=="waiting"?"?":status_=="running"?LV_SYMBOL_PLAY:status_=="failed"?LV_SYMBOL_WARNING:LV_SYMBOL_PAUSE);
-  lv_obj_set_style_local_text_color(icon_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status_)==0x750e23?0xd7969e:status_=="running"?0x63c583:0xa9b5af:0xa9b5af));
-  lv_label_set_text(name_,shorten(sessionName_.empty()?stateName(status_):sessionName_,157).c_str());
-  lv_label_set_text(batteryLabel_,(std::to_string(battery_)+"%").c_str());
-  const bool choose=answering_ && canAnswer();
-  lv_obj_set_hidden(choiceLabel_,!choose);lv_obj_set_hidden(progress_,!choose || step==0);
-  if(choose){
-    const auto left=actions_.empty()?"":actions_[0].label;
-    const auto right=actions_.size()>1?actions_[1].label:"";
-    const auto choices=(choice_==0?"[ "+left+" ]":left)+"    "+(choice_==1?"[ "+right+" ]":right);
-    lv_label_set_text(choiceLabel_,choices.c_str()); lv_obj_set_width(progress_,std::max(1,step*21));
-  }
-  const std::string body=!connected_?"PCとの接続がありません":!pending_.empty() && answering_?(acknowledged_?"PCが回答を受信しました":"PCへ送信中です"):choose?"":pages_[page_];
-  lv_label_set_text(body_,body.c_str());
-  const std::string hint=!error_.empty()?error_:!connected_?"接続を確認してください":!pending_.empty()?"C:本文":choose?"A:切替 B:長押し":(page_+1<(int)pages_.size()?"A:次 B:前":canAnswer()?"A:回答 B:前":"A:次 B:前");
-  lv_label_set_text(footer_,hint.c_str());
-  lv_label_set_text(counter_,choose?"0.9s":(std::to_string(page_+1)+"/"+std::to_string(pages_.size())).c_str());
+  const auto now=lv_tick_get();const auto elapsed=now-lastTick_;lastTick_=now;
+  advanceScroll(elapsed);
+  if(!dirty_)return;dirty_=false;render();
+}
+void CompactUi::render() {
+  const auto* s=current();const auto status=s?s->status:"idle";
   lv_obj_set_hidden(root_,!powered_);
+  lv_obj_set_style_local_border_color(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status):0x4d5552));
+  lv_label_set_text(icon_,connected_?icon(status):LV_SYMBOL_CLOSE);
+  lv_obj_set_style_local_text_color(icon_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(!connected_?0xa9b5af:status=="running"?0x63c583:(status=="waiting" || status=="failed")?0xd7969e:0xa9b5af));
+  lv_label_set_text(batteryLabel_,(std::to_string(battery_)+"%").c_str());
+  lv_label_set_text(counter_,listOpen_?(sessions_.empty()?"0/0":(std::to_string(listFocus_+1)+"/"+std::to_string(sessions_.size())).c_str()):("? "+std::to_string(waitingCount())).c_str());
+  lv_label_set_text(name_,listOpen_?"セッション":shorten(s?(s->name.empty()?stateName(status):s->name):"待機中",textWidth).c_str());
+  lv_obj_set_hidden(viewport_,listOpen_ && !sessions_.empty());
+  const bool options=!listOpen_ && s && connected_ && hasOptions(*s);
+  for(int i=0;i<2;++i) {
+    const int first=s?(s->choice/2)*2:0;const int index=first+i;
+    const bool show=options && index<(int)s->actions.size();
+    lv_obj_set_hidden(optionRows_[i],!show);
+    if(show) {
+      const bool focus=index==s->choice;
+      box(optionRows_[i],focus?0x26372f:0x090e0d,1,focus?0xa1b5a8:0x38473d);
+      lv_label_set_text(optionLabels_[i],shorten((focus?"> ":"  ")+s->actions[index].label,textWidth-10).c_str());
+    }
+  }
+  for(int i=0;i<4;++i) {
+    const int index=(listFocus_/4)*4+i;const bool show=listOpen_ && index<(int)sessions_.size();
+    lv_obj_set_hidden(listRows_[i],!show);
+    if(show) {
+      const auto& entry=sessions_[index];const bool focus=index==listFocus_;
+      box(listRows_[i],focus?0x26372f:0x090e0d,1,focus?0xa1b5a8:0x38473d);
+      lv_label_set_text(listIcons_[i],icon(entry.status));
+      lv_obj_set_style_local_text_color(listIcons_[i],LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(entry.status=="running"?0x63c583:entry.status=="waiting"?0xd7969e:0xa9b5af));
+      lv_label_set_text(listLabels_[i],shorten(entry.name.empty()?stateName(entry.status):entry.name,86).c_str());
+    }
+  }
+  if(listOpen_ && sessions_.empty()) {
+    lv_obj_set_height(viewport_,fullHeight);lv_label_set_text(body_,"セッションは\nありません");
+    lv_obj_set_height(body_,fullHeight);lv_obj_set_y(body_,0);lv_label_set_text(footer_,"B:戻る");
+  } else if(!listOpen_) {
+    const int height=options?questionHeight:fullHeight;lv_obj_set_height(viewport_,height);
+    std::string body;int y=0;
+    if(!s)body="セッションを\n待っています";
+    else if(!connected_)body="PCとの接続が\nありません";
+    else if(!s->pending.empty())body=s->acknowledged?"PCが回答を\n受信しました":"PCへ送信中です";
+    else if(!s->error.empty())body=wrap(s->error,textWidth);
+    else { body=s->wrapped;y=-s->scrollPixels; }
+    lv_label_set_text(body_,body.c_str());
+    lv_obj_set_height(body_,std::max(height,(1+(int)std::count(body.begin(),body.end(),'\n'))*vibe_jp_16.line_height));
+    lv_obj_set_y(body_,y);
+    lv_label_set_text(footer_,options?"C:選択 A:決定":"B:一覧");
+  } else lv_label_set_text(footer_,"C:次 A:決定");
 }
-std::string CompactUi::snapshot()const {
-  JsonDocument d;d["state"]=status_;d["uiId"]=id_;d["session"]=sessionName_;d["message"]=message_;
-  d["page"]=page_;d["pages"]=pages_.size();d["displayMessage"]=pages_.empty()?"":pages_[page_];
-  d["answering"]=answering_;d["choice"]=choice_;d["pending"]=pending_;d["acknowledged"]=acknowledged_;
-  d["connected"]=connected_;d["powered"]=powered_;d["holdMs"]=900;d["holdStep"]=holdStep_;d["error"]=error_;
-  d["label"]=sessionName_+"。"+stateName(status_)+"。"+(pages_.empty()?message_:pages_[page_]);
-  d["frameColor"]=frame(status_);std::string out;serializeJson(d,out);return out;
+std::string CompactUi::snapshot() const {
+  JsonDocument d;const auto* s=current();
+  d["state"]=s?s->status:"idle";d["uiId"]=s?s->uiId:"";d["sessionId"]=s?s->id:"";d["session"]=s?s->name:"";
+  d["message"]=s?s->message:"";d["displayMessage"]=s?s->wrapped:"";
+  d["choice"]=s?s->choice:0;d["pending"]=s?s->pending:"";d["acknowledged"]=s && s->acknowledged;d["error"]=s?s->error:"";
+  d["connected"]=connected_;d["powered"]=powered_;d["listOpen"]=listOpen_;d["listFocus"]=listFocus_;
+  d["waitingCount"]=waitingCount();d["scrollPixels"]=s?s->scrollPixels:0;d["scrollSpeed"]=scrollSpeed;
+  d["bodyHeight"]=s && connected_ && hasOptions(*s)?questionHeight:fullHeight;d["contentHeight"]=s?s->contentHeight:0;
+  d["frameColor"]=frame(s?s->status:"idle");
+  const bool answerable=s && !listOpen_ && canAnswer(*s);d["answerable"]=answerable;
+  auto actions=d["actions"].to<JsonArray>();
+  if(s)for(size_t i=0;i<s->actions.size();++i) {
+    auto a=actions.add<JsonObject>();a["id"]=s->actions[i].id;a["label"]=s->actions[i].label;a["focused"]=answerable && (int)i==s->choice;
+  }
+  auto sessions=d["sessions"].to<JsonArray>();
+  for(size_t i=0;i<sessions_.size();++i) {
+    auto entry=sessions.add<JsonObject>();entry["id"]=sessions_[i].id;entry["name"]=sessions_[i].name;entry["state"]=sessions_[i].status;
+    entry["selected"]=(int)i==selected_;entry["focused"]=listOpen_ && (int)i==listFocus_;entry["pending"]=sessions_[i].pending;
+  }
+  if(listOpen_)d["label"]=sessions_.empty()?"セッションはありません":"セッション一覧。"+sessions_[listFocus_].name+"。Cで次、Aで決定。";
+  else d["label"]=s?s->name+"。"+stateName(s->status)+"。"+s->message:"セッションを待っています";
+  std::string out;serializeJson(d,out);return out;
 }
-std::string CompactUi::takeAction(){auto out=outgoing_;outgoing_.clear();return out;}
+std::string CompactUi::takeAction() {
+  if(outgoing_.empty())return "";
+  auto value=outgoing_.front().json;outgoing_.pop_front();return value;
+}
 }

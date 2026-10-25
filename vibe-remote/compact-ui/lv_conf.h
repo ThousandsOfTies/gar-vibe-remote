@@ -10,8 +10,8 @@ typedef void* lv_disp_drv_user_data_t;
 typedef void* lv_indev_drv_user_data_t;
 typedef void* lv_font_user_data_t;
 typedef void* lv_obj_user_data_t;
-#define LV_HOR_RES_MAX 240
-#define LV_VER_RES_MAX 135
+#define LV_HOR_RES_MAX 135
+#define LV_VER_RES_MAX 240
 #define LV_COLOR_DEPTH 16
 #define LV_COLOR_16_SWAP 0
 #define LV_MEM_SIZE (128U * 1024U)
