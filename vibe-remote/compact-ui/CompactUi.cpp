@@ -13,9 +13,9 @@ uint32_t frame(const std::string& status) {
   return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x9c263b : 0x4d5552;
 }
 uint32_t sessionBackground(const std::string& status) {
-  // Large, brighter color areas remain distinguishable on the physical TFT.
+  // Muted color areas remain distinguishable on the physical TFT.
   // Every name uses black text, including neutral and disconnected states.
-  return status=="running" ? 0x79c98e : (status=="waiting" || status=="failed") ? 0xef7f87 : 0xb9c1bd;
+  return status=="running" ? 0x5d976c : (status=="waiting" || status=="failed") ? 0x9f6667 : 0x8b958e;
 }
 const char* icon(const std::string& status) {
   return status=="waiting" ? "?" : status=="running" ? LV_SYMBOL_PLAY : status=="failed" ? LV_SYMBOL_WARNING : LV_SYMBOL_PAUSE;
