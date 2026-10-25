@@ -10,7 +10,7 @@ std::string text(JsonVariantConst v, const char* fallback="") {
   return v.is<const char*>() ? v.as<const char*>() : fallback;
 }
 uint32_t frame(const std::string& status) {
-  return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x750e23 : 0x4d5552;
+  return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x9c263b : 0x4d5552;
 }
 const char* icon(const std::string& status) {
   return status=="waiting" ? "?" : status=="running" ? LV_SYMBOL_PLAY : status=="failed" ? LV_SYMBOL_WARNING : LV_SYMBOL_PAUSE;
@@ -53,6 +53,8 @@ void box(lv_obj_t* o, uint32_t bg, int border, uint32_t edge) {
   lv_obj_set_style_local_bg_opa(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_COVER);
   lv_obj_set_style_local_border_color(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(edge));
   lv_obj_set_style_local_border_width(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,border);
+  lv_obj_set_style_local_border_opa(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_COVER);
+  lv_obj_set_style_local_border_side(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_BORDER_SIDE_FULL);
   lv_obj_set_style_local_radius(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
   lv_obj_set_style_local_pad_all(o,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,0);
   lv_obj_set_click(o,false);
@@ -70,16 +72,16 @@ lv_obj_t* CompactUi::label(lv_obj_t* parent,int x,int y,int width,const lv_font_
 }
 void CompactUi::begin() {
   if(root_)return;
-  root_=lv_obj_create(nullptr,nullptr);lv_obj_set_size(root_,135,240);box(root_,0x090e0d,3,0x4d5552);
+  root_=lv_obj_create(nullptr,nullptr);lv_obj_set_size(root_,135,240);box(root_,0x090e0d,0,0);
   icon_=label(root_,9,10,19,&lv_font_montserrat_16);
   counter_=label(root_,37,12,51,&lv_font_montserrat_12);
   batteryLabel_=label(root_,94,12,34,&lv_font_montserrat_12);
   name_=label(root_,9,32,textWidth,&vibe_jp_16);
   viewport_=lv_obj_create(root_,nullptr);lv_obj_set_pos(viewport_,9,textTop);lv_obj_set_size(viewport_,textWidth,fullHeight);box(viewport_,0x090e0d,0,0);
   body_=label(viewport_,0,0,textWidth,&vibe_jp_16);
-  footer_=label(root_,9,216,textWidth,&vibe_jp_16);
+  footer_=label(root_,9,212,textWidth,&vibe_jp_16);
   for(int i=0;i<2;++i) {
-    optionRows_[i]=lv_obj_create(root_,nullptr);lv_obj_set_pos(optionRows_[i],9,158+i*30);lv_obj_set_size(optionRows_[i],textWidth,25);
+    optionRows_[i]=lv_obj_create(root_,nullptr);lv_obj_set_pos(optionRows_[i],9,156+i*28);lv_obj_set_size(optionRows_[i],textWidth,25);
     optionLabels_[i]=label(optionRows_[i],5,2,textWidth-10,&vibe_jp_16);
   }
   for(int i=0;i<4;++i) {
@@ -87,6 +89,11 @@ void CompactUi::begin() {
     listIcons_[i]=label(listRows_[i],5,9,17,&lv_font_montserrat_16);
     listLabels_[i]=label(listRows_[i],25,6,86,&vibe_jp_16);
   }
+  // Keep the state frame inside the physical LCD bezel, independent of the
+  // active theme's screen border. This last, passive child stays above content.
+  frame_=lv_obj_create(root_,nullptr);lv_obj_set_pos(frame_,2,2);lv_obj_set_size(frame_,131,236);
+  box(frame_,0x090e0d,4,0x4d5552);
+  lv_obj_set_style_local_bg_opa(frame_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,LV_OPA_TRANSP);
   lastTick_=lv_tick_get();lv_scr_load(root_);refresh();
 }
 CompactUi::Session* CompactUi::current() { return sessions_.empty() ? nullptr : &sessions_[selected_]; }
@@ -240,7 +247,7 @@ void CompactUi::refresh() {
 void CompactUi::render() {
   const auto* s=current();const auto status=s?s->status:"idle";
   lv_obj_set_hidden(root_,!powered_);
-  lv_obj_set_style_local_border_color(root_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status):0x4d5552));
+  lv_obj_set_style_local_border_color(frame_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status):0x4d5552));
   lv_label_set_text(icon_,connected_?icon(status):LV_SYMBOL_CLOSE);
   lv_obj_set_style_local_text_color(icon_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(!connected_?0xa9b5af:status=="running"?0x63c583:(status=="waiting" || status=="failed")?0xd7969e:0xa9b5af));
   lv_label_set_text(batteryLabel_,(std::to_string(battery_)+"%").c_str());
@@ -294,7 +301,8 @@ std::string CompactUi::snapshot() const {
   d["connected"]=connected_;d["powered"]=powered_;d["listOpen"]=listOpen_;d["listFocus"]=listFocus_;
   d["waitingCount"]=waitingCount();d["scrollPixels"]=s?s->scrollPixels:0;d["scrollSpeed"]=scrollSpeed;
   d["bodyHeight"]=s && connected_ && hasOptions(*s)?questionHeight:fullHeight;d["contentHeight"]=s?s->contentHeight:0;
-  d["frameColor"]=frame(s?s->status:"idle");
+  d["frameColor"]=connected_?frame(s?s->status:"idle"):0x4d5552;
+  d["frameInset"]=2;d["frameWidth"]=4;
   const bool answerable=s && !listOpen_ && canAnswer(*s);d["answerable"]=answerable;
   auto actions=d["actions"].to<JsonArray>();
   if(s)for(size_t i=0;i<s->actions.size();++i) {

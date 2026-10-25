@@ -29,7 +29,7 @@ class CompactUi {
   struct Outgoing { std::string sessionId, json; };
   static constexpr int maxSessions=16, maxActions=8, scrollSpeed=9;
   static constexpr int textWidth=117, textTop=60, questionHeight=90, fullHeight=148;
-  lv_obj_t *root_=nullptr, *icon_=nullptr, *name_=nullptr, *batteryLabel_=nullptr,
+  lv_obj_t *root_=nullptr, *frame_=nullptr, *icon_=nullptr, *name_=nullptr, *batteryLabel_=nullptr,
     *viewport_=nullptr, *body_=nullptr, *footer_=nullptr, *counter_=nullptr;
   lv_obj_t* optionRows_[2]{};
   lv_obj_t* optionLabels_[2]{};
