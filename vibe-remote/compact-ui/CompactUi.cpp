@@ -12,6 +12,11 @@ std::string text(JsonVariantConst v, const char* fallback="") {
 uint32_t frame(const std::string& status) {
   return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x9c263b : 0x4d5552;
 }
+uint32_t sessionBackground(const std::string& status) {
+  // Large, brighter color areas remain distinguishable on the physical TFT.
+  // Every name uses black text, including neutral and disconnected states.
+  return status=="running" ? 0x79c98e : (status=="waiting" || status=="failed") ? 0xef7f87 : 0xb9c1bd;
+}
 const char* icon(const std::string& status) {
   return status=="waiting" ? "?" : status=="running" ? LV_SYMBOL_PLAY : status=="failed" ? LV_SYMBOL_WARNING : LV_SYMBOL_PAUSE;
 }
@@ -76,7 +81,10 @@ void CompactUi::begin() {
   icon_=label(root_,9,10,19,&lv_font_montserrat_16);
   counter_=label(root_,37,12,51,&lv_font_montserrat_12);
   batteryLabel_=label(root_,94,12,34,&lv_font_montserrat_12);
-  name_=label(root_,9,32,textWidth,&vibe_jp_16);
+  nameBand_=lv_obj_create(root_,nullptr);lv_obj_set_pos(nameBand_,9,29);lv_obj_set_size(nameBand_,textWidth,26);
+  box(nameBand_,sessionBackground("idle"),0,0);
+  name_=label(nameBand_,4,3,textWidth-8,&vibe_jp_16);
+  lv_obj_set_style_local_text_color(name_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x000000));
   viewport_=lv_obj_create(root_,nullptr);lv_obj_set_pos(viewport_,9,textTop);lv_obj_set_size(viewport_,textWidth,fullHeight);box(viewport_,0x090e0d,0,0);
   body_=label(viewport_,0,0,textWidth,&vibe_jp_16);
   footer_=label(root_,9,212,textWidth,&vibe_jp_16);
@@ -88,6 +96,7 @@ void CompactUi::begin() {
     listRows_[i]=lv_obj_create(root_,nullptr);lv_obj_set_pos(listRows_[i],9,60+i*37);lv_obj_set_size(listRows_[i],textWidth,32);
     listIcons_[i]=label(listRows_[i],5,9,17,&lv_font_montserrat_16);
     listLabels_[i]=label(listRows_[i],25,6,86,&vibe_jp_16);
+    lv_obj_set_style_local_text_color(listLabels_[i],LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x000000));
   }
   // Keep the state frame inside the physical LCD bezel, independent of the
   // active theme's screen border. This last, passive child stays above content.
@@ -252,7 +261,8 @@ void CompactUi::render() {
   lv_obj_set_style_local_text_color(icon_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(!connected_?0xa9b5af:status=="running"?0x63c583:(status=="waiting" || status=="failed")?0xd7969e:0xa9b5af));
   lv_label_set_text(batteryLabel_,(std::to_string(battery_)+"%").c_str());
   lv_label_set_text(counter_,listOpen_?(sessions_.empty()?"0/0":(std::to_string(listFocus_+1)+"/"+std::to_string(sessions_.size())).c_str()):("? "+std::to_string(waitingCount())).c_str());
-  lv_label_set_text(name_,listOpen_?"セッション":shorten(s?(s->name.empty()?stateName(status):s->name):"待機中",textWidth).c_str());
+  lv_obj_set_style_local_bg_color(nameBand_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(sessionBackground(!connected_ || listOpen_?"idle":status)));
+  lv_label_set_text(name_,listOpen_?"セッション":shorten(s?(s->name.empty()?stateName(status):s->name):"待機中",textWidth-8).c_str());
   lv_obj_set_hidden(viewport_,listOpen_ && !sessions_.empty());
   const bool options=!listOpen_ && s && connected_ && hasOptions(*s);
   for(int i=0;i<2;++i) {
@@ -270,9 +280,9 @@ void CompactUi::render() {
     lv_obj_set_hidden(listRows_[i],!show);
     if(show) {
       const auto& entry=sessions_[index];const bool focus=index==listFocus_;
-      box(listRows_[i],focus?0x26372f:0x090e0d,1,focus?0xa1b5a8:0x38473d);
+      box(listRows_[i],sessionBackground(connected_?entry.status:"idle"),focus?3:1,0x000000);
       lv_label_set_text(listIcons_[i],icon(entry.status));
-      lv_obj_set_style_local_text_color(listIcons_[i],LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(entry.status=="running"?0x63c583:entry.status=="waiting"?0xd7969e:0xa9b5af));
+      lv_obj_set_style_local_text_color(listIcons_[i],LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x000000));
       lv_label_set_text(listLabels_[i],shorten(entry.name.empty()?stateName(entry.status):entry.name,86).c_str());
     }
   }
@@ -303,6 +313,8 @@ std::string CompactUi::snapshot() const {
   d["bodyHeight"]=s && connected_ && hasOptions(*s)?questionHeight:fullHeight;d["contentHeight"]=s?s->contentHeight:0;
   d["frameColor"]=connected_?frame(s?s->status:"idle"):0x4d5552;
   d["frameInset"]=2;d["frameWidth"]=4;
+  d["sessionNameBackground"]=sessionBackground(!connected_ || listOpen_?"idle":s?s->status:"idle");
+  d["sessionNameTextColor"]=0x000000;
   const bool answerable=s && !listOpen_ && canAnswer(*s);d["answerable"]=answerable;
   auto actions=d["actions"].to<JsonArray>();
   if(s)for(size_t i=0;i<s->actions.size();++i) {
