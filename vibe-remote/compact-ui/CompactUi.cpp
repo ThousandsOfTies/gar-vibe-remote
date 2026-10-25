@@ -13,9 +13,9 @@ uint32_t frame(const std::string& status) {
   return status=="running" ? 0x238a43 : (status=="waiting" || status=="failed") ? 0x9c263b : 0x4d5552;
 }
 uint32_t sessionBackground(const std::string& status) {
-  // Muted color areas remain distinguishable on the physical TFT.
+  // Name bands and the outer frame share the same state palette.
   // Every name uses black text, including neutral and disconnected states.
-  return status=="running" ? 0x5d976c : (status=="waiting" || status=="failed") ? 0x9f6667 : 0x8b958e;
+  return frame(status);
 }
 const char* icon(const std::string& status) {
   return status=="waiting" ? "?" : status=="running" ? LV_SYMBOL_PLAY : status=="failed" ? LV_SYMBOL_WARNING : LV_SYMBOL_PAUSE;
