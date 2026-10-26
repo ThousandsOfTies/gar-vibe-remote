@@ -24,6 +24,7 @@ class CompactUi {
     std::vector<Action> actions;
     int choice=0, contentHeight=21, scrollPixels=0;
     uint64_t scrollTime=0;
+    uint64_t waitingOrder=0;
     bool acknowledged=false;
   };
   struct Outgoing { std::string sessionId, json; };
@@ -39,10 +40,16 @@ class CompactUi {
   std::vector<Session> sessions_;
   std::deque<Outgoing> outgoing_;
   bool powered_=true, connected_=true, listOpen_=false, dirty_=true;
+  bool selectionLost_=true;
   int battery_=82, selected_=0, listFocus_=0;
-  unsigned generation_=0, pressGeneration_=0;
+  unsigned generation_=0, pressGeneration_=0, heldButtons_=0;
+  uint64_t waitingSequence_=0;
   uint32_t lastTick_=0, pressedAt_=0;
   char pressed_=0;
+  enum class Notice { none, manual, received, completed };
+  Notice notice_=Notice::none;
+  std::string choiceSession_, choiceUi_, noticeSession_;
+  uint32_t noticeAt_=0;
   Session* current();
   const Session* current() const;
   int find(const std::string& id) const;
@@ -51,6 +58,12 @@ class CompactUi {
   bool merge(Session& incoming, const Session& previous);
   bool canAnswer(const Session& session) const;
   bool hasOptions(const Session& session) const;
+  int priority(const Session& session) const;
+  bool choosing() const;
+  const char* autoPause() const;
+  void holdChoice();
+  void notice(Notice kind, const std::string& sessionId);
+  void autoSelect();
   void cancel();
   void invalidate();
   void discardOutgoing(const std::string& sessionId);

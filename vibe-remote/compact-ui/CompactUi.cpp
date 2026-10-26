@@ -112,7 +112,65 @@ int CompactUi::find(const std::string& id) const {
   return -1;
 }
 bool CompactUi::hasOptions(const Session& s) const { return s.status=="waiting" && !s.uiId.empty() && !s.actions.empty() && s.pending.empty(); }
-bool CompactUi::canAnswer(const Session& s) const { return powered_ && connected_ && hasOptions(s); }
+bool CompactUi::canAnswer(const Session& s) const {
+  return powered_ && connected_ && hasOptions(s) && !(notice_==Notice::received && noticeSession_==s.id);
+}
+int CompactUi::priority(const Session& s) const {
+  if(!s.pending.empty())return 0;
+  return s.status=="waiting" ? 4 : s.status=="failed" ? 3 : s.status=="running" ? 2 : 0;
+}
+bool CompactUi::choosing() const {
+  const auto* s=current();
+  return s && s->id==choiceSession_ && s->uiId==choiceUi_ && s->status=="waiting" &&
+    (hasOptions(*s) || (!s->pending.empty() && !s->acknowledged));
+}
+const char* CompactUi::autoPause() const {
+  if(!powered_)return "power";
+  if(!connected_)return "connection";
+  if(heldButtons_)return "button";
+  if(listOpen_)return "list";
+  if(choosing())return "choice";
+  if(notice_==Notice::manual)return "manual";
+  if(notice_==Notice::received)return "received";
+  if(notice_==Notice::completed)return "completed";
+  return "";
+}
+void CompactUi::holdChoice() {
+  const auto* s=current();choiceSession_=s?s->id:"";choiceUi_=s?s->uiId:"";
+  notice_=Notice::none;
+}
+void CompactUi::notice(Notice kind,const std::string& id) {
+  notice_=kind;noticeSession_=id;noticeAt_=lv_tick_get();dirty_=true;
+}
+void CompactUi::autoSelect() {
+  if(!choosing() && !choiceSession_.empty()) {
+    choiceSession_.clear();choiceUi_.clear();selectionLost_=true;
+  }
+  const auto* s=current();
+  const uint32_t duration=notice_==Notice::manual?10000:2000;
+  if(notice_!=Notice::none && (!s || s->id!=noticeSession_ || lv_tick_elaps(noticeAt_)>=duration ||
+     (notice_==Notice::completed && s->status!="idle" && s->status!="done"))) {
+    notice_=Notice::none;dirty_=true;
+  }
+  if(!powered_ || !connected_ || heldButtons_ || listOpen_ || choosing() || sessions_.empty())return;
+  int best=-1;
+  for(size_t i=0;i<sessions_.size();++i) {
+    if(best<0 || priority(sessions_[i])>priority(sessions_[best]) ||
+       (priority(sessions_[i])==4 && priority(sessions_[best])==4 &&
+        sessions_[i].waitingOrder<sessions_[best].waitingOrder))best=i;
+  }
+  if(priority(*s)==priority(sessions_[best]) && (!selectionLost_ || priority(*s)!=4))best=selected_;
+  // Completion is a brief notice, never a permanent priority above running.
+  // Questions and errors can interrupt it; manual reading and reply feedback stay fixed.
+  if(notice_!=Notice::none) {
+    if(notice_!=Notice::completed || priority(sessions_[best])<3)return;
+    notice_=Notice::none;dirty_=true;
+  }
+  selectionLost_=false;
+  if(best!=selected_) {
+    selected_=best;listFocus_=best;invalidate();dirty_=true;
+  }
+}
 int CompactUi::waitingCount() const {
   return std::count_if(sessions_.begin(),sessions_.end(),[this](const Session& s){return hasOptions(s);});
 }
@@ -144,6 +202,17 @@ bool CompactUi::merge(Session& next,const Session& old) {
     same=next.actions[i].id==old.actions[i].id && next.actions[i].label==old.actions[i].label && next.actions[i].button==old.actions[i].button;
   if(same) {
     const auto name=next.name;next=old;next.name=name;
+  } else {
+    if(next.status=="waiting" && old.status=="waiting" && next.uiId==old.uiId)
+      next.waitingOrder=old.waitingOrder;
+    // The PC removes actions while forwarding an answer. Keep the matching
+    // receipt identity until delivery finishes, without keeping obsolete actions.
+    if(next.uiId==old.uiId && next.status=="waiting" && next.actions.empty() && !old.pending.empty()) {
+      next.pending=old.pending;next.acknowledged=old.acknowledged;
+    }
+    if(current() && current()->id==old.id && old.status=="running" &&
+       (next.status=="done" || next.status=="idle") && notice_==Notice::none)
+      notice(Notice::completed,next.id);
   }
   return same;
 }
@@ -160,7 +229,12 @@ bool CompactUi::receive(const char* json) {
     const int index=find(text(d["sessionId"]));if(index<0)return false;
     auto& s=sessions_[index];
     if(s.pending.empty() || text(d["uiId"])!=s.uiId || text(d["actionId"])!=s.pending || !d["ok"].is<bool>())return false;
-    if(d["ok"].as<bool>()) { s.acknowledged=true;s.error.clear(); }
+    if(d["ok"].as<bool>()) {
+      s.acknowledged=true;s.error.clear();
+      if(index==selected_) {
+        choiceSession_.clear();choiceUi_.clear();selectionLost_=true;notice(Notice::received,s.id);
+      }
+    }
     else { s.pending.clear();s.error="送信エラー\n選び直してください"; }
     dirty_=true;refresh();return true;
   }
@@ -182,10 +256,11 @@ bool CompactUi::receive(const char* json) {
         discardOutgoing(next[i].id);if(next[i].id==selectedId)changedSelected=true;
       }
       if(i>=sessions_.size() || sessions_[i].id!=next[i].id)changedList=true;
+      if(next[i].status=="waiting" && !next[i].waitingOrder)next[i].waitingOrder=++waitingSequence_;
     }
     for(const auto& old:sessions_)if(!ids.count(old.id))discardOutgoing(old.id);
     sessions_=std::move(next);
-    selected_=find(selectedId);if(selected_<0){selected_=0;changedSelected=true;}
+    selected_=find(selectedId);if(selected_<0){selected_=0;changedSelected=true;selectionLost_=true;}
     listFocus_=find(focusId);if(listFocus_<0)listFocus_=selected_;
     // A list gesture selects a session identity, not an answer. Live text/status
     // changes underneath it must not cancel B/C/A navigation. Membership/order
@@ -204,6 +279,8 @@ bool CompactUi::receive(const char* json) {
     if(!merge(next,sessions_[old])) { discardOutgoing(next.id);if(old==selected_ && !listOpen_ && pressed_!='B')invalidate(); }
     sessions_[old]=std::move(next);
   }
+  auto& received=sessions_[old<0?sessions_.size()-1:old];
+  if(received.status=="waiting" && !received.waitingOrder)received.waitingOrder=++waitingSequence_;
   dirty_=true;refresh();return true;
 }
 void CompactUi::hardware(bool powered,bool connected,int battery) {
@@ -215,25 +292,35 @@ void CompactUi::hardware(bool powered,bool connected,int battery) {
   powered_=powered;connected_=connected;battery_=std::clamp(battery,0,100);dirty_=true;refresh();
 }
 void CompactUi::button(char key,int phase) {
+  if(key!='A' && key!='B' && key!='C')return;
+  const unsigned bit=1u<<(key-'A');
+  if(phase==1)heldButtons_|=bit;
   refresh();
-  if(phase<0) { cancel();return; }
-  if(!powered_ || (key!='A' && key!='B' && key!='C'))return;
+  if(phase<0) { heldButtons_&=~bit;cancel();refresh();return; }
+  if(!powered_) { if(phase==0)heldButtons_&=~bit;return; }
   if(phase==1) {
     if(pressed_){cancel();return;}
     pressed_=key;pressedAt_=lv_tick_get();pressGeneration_=generation_;return;
   }
-  if(pressed_!=key || pressGeneration_!=generation_) { cancel();return; }
+  if(pressed_!=key || pressGeneration_!=generation_) { heldButtons_&=~bit;cancel();refresh();return; }
   const auto duration=lv_tick_elaps(pressedAt_);cancel();
+  heldButtons_&=~bit;
   // C is also the physical power switch; a long power gesture is not a focus step.
-  if(key=='C' && duration>=1000)return;
+  if(key=='C' && duration>=1000) { refresh();return; }
   if(key=='B') {
+    notice_=Notice::none;
     listOpen_=!listOpen_;listFocus_=selected_;invalidate();
   } else if(listOpen_) {
     if(key=='C' && !sessions_.empty())listFocus_=(listFocus_+1)%sessions_.size();
-    if(key=='A' && !sessions_.empty()) { selected_=listFocus_;listOpen_=false;invalidate(); }
+    if(key=='A' && !sessions_.empty()) {
+      selected_=listFocus_;listOpen_=false;selectionLost_=false;invalidate();
+      choiceSession_.clear();choiceUi_.clear();
+      if(hasOptions(*current()))holdChoice();else notice(Notice::manual,current()->id);
+    }
   } else if(auto* s=current(); s && canAnswer(*s)) {
-    if(key=='C') { s->choice=(s->choice+1)%s->actions.size();s->error.clear(); }
+    if(key=='C') { holdChoice();s->choice=(s->choice+1)%s->actions.size();s->error.clear(); }
     if(key=='A') {
+      holdChoice();
       const auto& action=s->actions[s->choice];s->pending=action.id;s->acknowledged=false;s->error.clear();
       JsonDocument d;d["type"]="uiAction";d["sessionId"]=s->id;d["uiId"]=s->uiId;d["actionId"]=action.id;d["button"]=action.button;
       std::string value;serializeJson(d,value);outgoing_.push_back({s->id,std::move(value)});
@@ -243,7 +330,8 @@ void CompactUi::button(char key,int phase) {
 }
 void CompactUi::advanceScroll(uint32_t elapsed) {
   auto* s=current();
-  if(!s || !powered_ || !connected_ || listOpen_ || pressed_ || !s->pending.empty() || !s->error.empty())return;
+  if(!s || !powered_ || !connected_ || listOpen_ || heldButtons_ || !s->pending.empty() || !s->error.empty() ||
+     notice_==Notice::received || notice_==Notice::completed)return;
   const int height=hasOptions(*s)?questionHeight:fullHeight;
   const int maximum=std::max(0,s->contentHeight-height);
   if(!maximum)return;
@@ -257,6 +345,7 @@ void CompactUi::refresh() {
   if(!root_)return;
   const auto now=lv_tick_get();const auto elapsed=now-lastTick_;lastTick_=now;
   advanceScroll(elapsed);
+  autoSelect();
   if(!dirty_)return;dirty_=false;render();
 }
 void CompactUi::render() {
@@ -270,7 +359,7 @@ void CompactUi::render() {
   lv_obj_set_style_local_bg_color(nameBand_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(sessionBackground(!connected_ || listOpen_?"idle":status)));
   lv_label_set_text(name_,listOpen_?"セッション":shorten(s?(s->name.empty()?stateName(status):s->name):"待機中",textWidth-8).c_str());
   lv_obj_set_hidden(viewport_,listOpen_ && !sessions_.empty());
-  const bool options=!listOpen_ && s && connected_ && hasOptions(*s);
+  const bool options=!listOpen_ && s && canAnswer(*s);
   for(int i=0;i<2;++i) {
     const int first=s?(s->choice/2)*2:0;const int index=first+i;
     const bool show=options && index<(int)s->actions.size();
@@ -300,6 +389,8 @@ void CompactUi::render() {
     std::string body;int y=0;
     if(!s)body="セッションを\n待っています";
     else if(!connected_)body="PCとの接続が\nありません";
+    else if(notice_==Notice::received)body="PCが回答を\n受信しました";
+    else if(notice_==Notice::completed)body=wrap(s->status=="done"?"作業が完了しました":"待機中になりました",textWidth);
     else if(!s->pending.empty())body=s->acknowledged?"PCが回答を\n受信しました":"PCへ送信中です";
     else if(!s->error.empty())body=wrap(s->error,textWidth);
     else { body=s->wrapped;y=-s->scrollPixels; }
@@ -316,7 +407,8 @@ std::string CompactUi::snapshot() const {
   d["choice"]=s?s->choice:0;d["pending"]=s?s->pending:"";d["acknowledged"]=s && s->acknowledged;d["error"]=s?s->error:"";
   d["connected"]=connected_;d["powered"]=powered_;d["listOpen"]=listOpen_;d["listFocus"]=listFocus_;
   d["waitingCount"]=waitingCount();d["scrollPixels"]=s?s->scrollPixels:0;d["scrollSpeed"]=scrollSpeed;
-  d["bodyHeight"]=s && connected_ && hasOptions(*s)?questionHeight:fullHeight;d["contentHeight"]=s?s->contentHeight:0;
+  d["autoPaused"]=autoPause();d["selectedPriority"]=s?priority(*s):0;
+  d["bodyHeight"]=s && canAnswer(*s)?questionHeight:fullHeight;d["contentHeight"]=s?s->contentHeight:0;
   d["frameColor"]=connected_?frame(s?s->status:"idle"):0x4d5552;
   d["frameInset"]=2;d["frameWidth"]=4;
   d["sessionNameBackground"]=sessionBackground(!connected_ || listOpen_?"idle":s?s->status:"idle");
