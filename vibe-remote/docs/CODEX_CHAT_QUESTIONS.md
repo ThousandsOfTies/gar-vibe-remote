@@ -24,3 +24,28 @@ choices. Changing content under an existing ID, competing owners and stale UI
 actions are rejected. At most 24 questions with 2–8 choices each are accepted.
 Send an empty snapshot with `release: true` on shutdown. An adapter must never
 replay an uncertain delivery or use a synthetic test as a human reply.
+
+## Multiple local sessions
+
+Set `sessionScope` to `project`, `local` or `manual`; retain an anchor `sessionId`.
+Project mode requires `codexCwd`; manual mode requires 1–16 `sessionIds`.
+The authenticated `POST /sessions` route takes an authoritative roster with a
+15-second owner lease:
+
+```json
+{"kind":"codex-sessions","owner":"stable-private-collector-id","sessions":[{"id":"chat-a","name":"Original chat title","kind":"codex","hostId":"local","cwd":"D:\\Example","status":{"type":"active","activeFlags":[]}}]}
+```
+
+The bridge enforces local Codex, scope, duplicate IDs and the 16-session bound.
+It publishes `type: sessions` snapshots. Each enrolled session owns an independent
+status store and ordinary-question manager. `/chat-questions` retains the same
+contract but uses the enrolled `sessionId`. A WebSocket `uiAction` **must** include
+both `sessionId` and the current random `uiId`; it cannot fall back to another
+session. Removal or expiry revokes every question belonging to that entry.
+Execution interactions and input tests stay outside the live multi-session path.
+
+The output uses a fixed display budget per session to stay under the physical
+64 KiB limit without changing another card's text/focus as background questions
+arrive or finish. Original reply labels remain in the caller's native-card model.
+Display-only names/labels/body may be shortened. A body with over 200 lines is
+rejected because it could exceed the LVGL coordinate budget after wrapping.

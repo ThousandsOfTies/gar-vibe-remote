@@ -34,6 +34,7 @@ test('ordinary choices require explicit configuration and never grant operation 
   );
   const q = new CodexChatQuestions(options);
   assert.throws(() => q.sync({ ...payload(), kind: 'approval' }));
+  assert.throws(() => q.sync(payload([{ ...first, question: '\n'.repeat(1600) + '質問' }])));
   q.sync(payload());
   assert.equal(q.answer(q.ui()!.id, 'option-0', 'browser'), false);
   assert.equal(q.answer(q.ui()!.id, 'unknown-choice', 'physical-test-device'), false);

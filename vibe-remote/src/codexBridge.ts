@@ -5,9 +5,10 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { CodexStatusStore, parseCodexEvent } from './codexStatus';
 import { CodexInteractions, InteractionError } from './codexInteraction';
 import { CodexChatQuestions } from './codexChatQuestions';
-import type { StateMessage } from './protocol';
+import { CodexSessions, type SessionOptions } from './codexSessions';
+import type { StateMessage, SessionsMessage } from './protocol';
 
-export interface CodexBridgeOptions {
+export interface CodexBridgeOptions extends SessionOptions {
   token: string;
   port?: number;
   sessionId?: string;
@@ -27,6 +28,10 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
   const now = options.now ?? Date.now;
   const interactions = new CodexInteractions(options, now);
   const chatQuestions = new CodexChatQuestions(options, now);
+  const sessions =
+    options.sessionScope && options.sessionScope !== 'single'
+      ? new CodexSessions(options, now)
+      : undefined;
   let inputTest:
     | {
         id: string;
@@ -48,7 +53,8 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
               ? 'expired'
               : 'pending'
         };
-  const currentState = (): StateMessage => {
+  const currentState = (): StateMessage | SessionsMessage => {
+    if (sessions) return sessions.state();
     const state = store.state();
     // The selector describes this session even when a question temporarily owns the screen.
     // Input routing still uses the original interaction id/session/turn checks.
@@ -126,6 +132,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
         url !== '/input-test' &&
         url !== '/interactions' &&
         url !== '/chat-questions' &&
+        url !== '/sessions' &&
         !interactionRoute)
     ) {
       json(res, 404, { error: 'Not found' });
@@ -136,7 +143,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
       return;
     }
     let size = 0;
-    const maximum = url === '/chat-questions' ? 262144 : 16384;
+    const maximum = url === '/chat-questions' || url === '/sessions' ? 262144 : 16384;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
@@ -149,15 +156,29 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
       }
       try {
         const payload: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        if (url === '/chat-questions') {
-          if (testStatus()?.status === 'pending' || interactions.pending)
-            throw new InteractionError(409, 'Another device question is pending');
-          const result = chatQuestions.sync(payload);
+        if (url === '/sessions') {
+          if (!sessions) throw new InteractionError(403, 'Multi-session monitoring is not enabled');
+          const result = sessions.sync(payload);
           broadcast();
           json(res, 200, result);
           return;
         }
+        if (url === '/chat-questions') {
+          if (testStatus()?.status === 'pending' || interactions.pending)
+            throw new InteractionError(409, 'Another device question is pending');
+          const before = JSON.stringify(sessions ? sessions.state() : chatQuestions.ui());
+          const result = sessions ? sessions.syncQuestions(payload) : chatQuestions.sync(payload);
+          if (before !== JSON.stringify(sessions ? sessions.state() : chatQuestions.ui()))
+            broadcast();
+          json(res, 200, result);
+          return;
+        }
         if (url === '/interactions') {
+          if (sessions)
+            throw new InteractionError(
+              403,
+              'Execution interactions stay on the PC in multi-session mode'
+            );
           if (testStatus()?.status === 'pending' || chatQuestions.pending)
             throw new InteractionError(409, 'An input test is pending');
           const interaction = interactions.create(payload, store.summary());
@@ -177,6 +198,11 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
           return;
         }
         if (url === '/input-test') {
+          if (sessions)
+            throw new InteractionError(
+              409,
+              'Use the isolated device test outside the live multi-session bridge'
+            );
           if (
             !payload ||
             typeof payload !== 'object' ||
@@ -200,7 +226,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
           return;
         }
         const event = parseCodexEvent(payload);
-        const accepted = store.ingest(event);
+        const accepted = sessions ? sessions.ingest(event) : store.ingest(event);
         if (accepted) {
           interactions.observe(event);
           broadcast();
@@ -236,12 +262,24 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
           type?: string;
           token?: string;
           uiId?: string;
+          sessionId?: string;
           actionId?: string;
           source?: string;
         };
         if (!authenticated(message.token)) {
           socket.send(JSON.stringify({ type: 'ack', ok: false, error: '認証に失敗しました' }));
           socket.close(1008, 'Authentication failed');
+          return;
+        }
+        if (sessions && message.type === 'uiAction' && clients.has(socket)) {
+          const ok = sessions.answer(
+            message.sessionId,
+            message.uiId,
+            message.actionId,
+            message.source
+          );
+          socket.send(JSON.stringify({ type: 'ack', ok }));
+          broadcast();
           return;
         }
         if (

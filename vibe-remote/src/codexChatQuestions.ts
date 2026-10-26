@@ -73,6 +73,7 @@ export class CodexChatQuestions {
         typeof q.question !== 'string' ||
         !q.question.trim() ||
         q.question.length > 2000 ||
+        q.question.split('\n').length > 200 ||
         /\p{Cc}/u.test(q.question.replace(/[\n\t]/g, '')) ||
         !Array.isArray(q.options) ||
         q.options.length < 2 ||

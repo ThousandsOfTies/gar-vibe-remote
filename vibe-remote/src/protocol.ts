@@ -73,6 +73,7 @@ export interface UiActionMessage {
   token: string;
   uiId: string;
   actionId: string;
+  sessionId?: string;
   button?: string;
   source?: string;
 }
@@ -139,6 +140,16 @@ export interface StateMessage {
   /** 直近に観測できた作業の実況（公式APIで取得） */
   activity: ActivitySnapshot;
   ts: number;
+}
+
+/** Authoritative inventory; an omitted session has been removed, never merged back. */
+export interface SessionsMessage {
+  type: 'sessions';
+  sessions: {
+    session: { id: string; name: string };
+    ui?: DeviceUiSpec;
+    agent?: AgentStatusSnapshot;
+  }[];
 }
 
 /** 拡張 → 状態ビューア：受領応答 */
