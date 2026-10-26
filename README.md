@@ -38,3 +38,10 @@ npm test
 
 Plus2への導入はProductの手順を使います。Productはsubmoduleのコミットを固定し、
 `firmware/stickc-plus2/platformio.ini`を使って共有UIを実機へ組み込みます。
+
+## ライセンス
+
+独自コードと文書は[MIT License](LICENSE)です。
+`vibe-remote/package.json`の`license: MIT`と同じ利用条件を、このリポジトリのLICENSEに明記しています。
+日本語フォントのデータは[SIL Open Font License 1.1](vibe-remote/touch-ui/OFL.txt)です。
+その他の依存ライブラリは、それぞれのライセンスに従います。
