@@ -35,6 +35,13 @@ snapshot reports delivered/failed IDs or removes cards answered on the PC.
 Selection acknowledgement means the bridge received the choice, not that the
 original application accepted it. A selected card has no remaining actions.
 
+The M5StickC Product currently delivers replies through the Codex App Tools
+`send_message_to_thread` operation. It preserves the original question ID but
+adds a chat message; it does not resolve the host application's native choice
+card. A delivered receipt must not be described as proof that the PC card was
+closed or marked answered. Host-card completion needs a separate supported
+reply operation; no such operation is exposed by the current App Tools list.
+
 The five-second owner lease prevents abandoned adapters from leaving active
 choices. Changing content under an existing ID, competing owners and stale UI
 actions are rejected. At most 24 questions with 2–8 choices each are accepted.
