@@ -35,12 +35,16 @@ snapshot reports delivered/failed IDs or removes cards answered on the PC.
 Selection acknowledgement means the bridge received the choice, not that the
 original application accepted it. A selected card has no remaining actions.
 
-The M5StickC Product currently delivers replies through the Codex App Tools
-`send_message_to_thread` operation. It preserves the original question ID but
-adds a chat message; it does not resolve the host application's native choice
-card. A delivered receipt must not be described as proof that the PC card was
-closed or marked answered. Host-card completion needs a separate supported
-reply operation; no such operation is exposed by the current App Tools list.
+The M5StickC Product uses App Tools for monitoring and a version-specific local
+coordination IPC adapter for ordinary replies. It rechecks the native owner,
+latest question, original choices and answered state before sending normal user
+input to the same chat. The native card can then complete through the host's
+normal reply handling. Active turns use steer; completed turns use start in the
+same chat. No model or permission settings are overridden. This is an internal
+compatibility interface, not a stable public API. If incompatible, delivery
+stops without falling back to a delegated message or replaying the answer.
+The shared bridge does not implement or assume this host-specific mechanism;
+the Product owns compatibility and physical round-trip verification.
 
 The five-second owner lease prevents abandoned adapters from leaving active
 choices. Changing content under an existing ID, competing owners and stale UI
