@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import { WebSocket, WebSocketServer } from 'ws';
 import { CodexStatusStore, parseCodexEvent } from './codexStatus';
 import { CodexInteractions, InteractionError } from './codexInteraction';
+import { CodexChatQuestions } from './codexChatQuestions';
 import type { StateMessage } from './protocol';
 
 export interface CodexBridgeOptions {
@@ -14,6 +15,8 @@ export interface CodexBridgeOptions {
   freshnessMs?: number;
   now?: () => number;
   watchInput?: boolean;
+  chatQuestions?: boolean;
+  chatQuestionSources?: string[];
 }
 
 export async function startCodexBridge(options: CodexBridgeOptions) {
@@ -23,6 +26,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
   const clients = new Set<WebSocket>();
   const now = options.now ?? Date.now;
   const interactions = new CodexInteractions(options, now);
+  const chatQuestions = new CodexChatQuestions(options, now);
   let inputTest:
     | {
         id: string;
@@ -48,7 +52,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
     const state = store.state();
     // The selector describes this session even when a question temporarily owns the screen.
     // Input routing still uses the original interaction id/session/turn checks.
-    const input = interactions.ui();
+    const input = chatQuestions.ui() ?? interactions.ui();
     if (input) return { ...state, ui: input };
     if (!inputTest) return state;
     const pending = !inputTest.answer && now() < inputTest.expiresAt;
@@ -118,7 +122,11 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
     const interactionRoute = url?.match(/^\/interactions\/([\w-]+)\/(poll|cancel)$/);
     if (
       req.method !== 'POST' ||
-      (url !== '/events' && url !== '/input-test' && url !== '/interactions' && !interactionRoute)
+      (url !== '/events' &&
+        url !== '/input-test' &&
+        url !== '/interactions' &&
+        url !== '/chat-questions' &&
+        !interactionRoute)
     ) {
       json(res, 404, { error: 'Not found' });
       return;
@@ -128,20 +136,29 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
       return;
     }
     let size = 0;
+    const maximum = url === '/chat-questions' ? 262144 : 16384;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size <= 16384) chunks.push(chunk);
+      if (size <= maximum) chunks.push(chunk);
     });
     req.on('end', () => {
-      if (size > 16384) {
+      if (size > maximum) {
         json(res, 413, { error: 'Event too large' });
         return;
       }
       try {
         const payload: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (url === '/chat-questions') {
+          if (testStatus()?.status === 'pending' || interactions.pending)
+            throw new InteractionError(409, 'Another device question is pending');
+          const result = chatQuestions.sync(payload);
+          broadcast();
+          json(res, 200, result);
+          return;
+        }
         if (url === '/interactions') {
-          if (testStatus()?.status === 'pending')
+          if (testStatus()?.status === 'pending' || chatQuestions.pending)
             throw new InteractionError(409, 'An input test is pending');
           const interaction = interactions.create(payload, store.summary());
           broadcast();
@@ -169,7 +186,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
             json(res, 400, { error: 'Input test accepts an empty object only' });
             return;
           }
-          if (testStatus()?.status === 'pending' || interactions.pending) {
+          if (testStatus()?.status === 'pending' || interactions.pending || chatQuestions.pending) {
             json(res, 409, { error: 'An input test is already pending', test: testStatus() });
             return;
           }
@@ -225,6 +242,15 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
         if (!authenticated(message.token)) {
           socket.send(JSON.stringify({ type: 'ack', ok: false, error: '認証に失敗しました' }));
           socket.close(1008, 'Authentication failed');
+          return;
+        }
+        if (
+          message.type === 'uiAction' &&
+          clients.has(socket) &&
+          chatQuestions.answer(message.uiId, message.actionId, message.source)
+        ) {
+          socket.send(JSON.stringify({ type: 'ack', ok: true }));
+          broadcast();
           return;
         }
         if (
