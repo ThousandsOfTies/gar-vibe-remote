@@ -34,10 +34,6 @@ export function powerShellPath(wsl: boolean = isWsl()): string {
   return 'powershell.exe';
 }
 
-export function defaultApprovalBrokerPort(wsl: boolean = isWsl()): number {
-  return wsl ? 39273 : 39271;
-}
-
 /** Quotes a value for use inside a single-quoted PowerShell string literal. */
 export function psQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;

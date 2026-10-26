@@ -7,7 +7,6 @@ import {
   buildStartPowerShellCommand,
   buildStatusPowerShellCommand,
   buildStopPowerShellCommand,
-  defaultApprovalBrokerPort,
   isWsl,
   parseProcessList,
   powerShellPath,
@@ -25,9 +24,18 @@ test('isWsl is true only on linux when the Windows PowerShell binary is present'
     isWsl('linux', (p) => p === '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'),
     true
   );
-  assert.equal(isWsl('linux', () => false), false);
-  assert.equal(isWsl('win32', () => true), false);
-  assert.equal(isWsl('darwin', () => true), false);
+  assert.equal(
+    isWsl('linux', () => false),
+    false
+  );
+  assert.equal(
+    isWsl('win32', () => true),
+    false
+  );
+  assert.equal(
+    isWsl('darwin', () => true),
+    false
+  );
 });
 
 test('powerShellPath switches between the WSL-mounted binary and the plain command', () => {
@@ -38,15 +46,10 @@ test('powerShellPath switches between the WSL-mounted binary and the plain comma
   assert.equal(powerShellPath(false), 'powershell.exe');
 });
 
-test('defaultApprovalBrokerPort differs between WSL and non-WSL hosts', () => {
-  assert.equal(defaultApprovalBrokerPort(true), 39273);
-  assert.equal(defaultApprovalBrokerPort(false), 39271);
-});
-
 test('buildBrokerStartArgs includes required flags and omits -DryRun when disabled', () => {
   const args = buildBrokerStartArgs('C:\\scripts\\broker.ps1', 'C:\\logs\\broker.log', {
     host: '127.0.0.1',
-    port: 39273,
+    port: 39271,
     token: 'secret-token',
     pollSeconds: 2,
     decisionTimeoutSeconds: 60,
@@ -63,7 +66,7 @@ test('buildBrokerStartArgs includes required flags and omits -DryRun when disabl
     '-HostName',
     '127.0.0.1',
     '-Port',
-    '39273',
+    '39271',
     '-Token',
     'secret-token',
     '-PollSeconds',

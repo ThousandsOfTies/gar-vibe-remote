@@ -6,7 +6,7 @@ M5StickC Plus2向け**135×240の縦画面**。C++の`CompactUi`はLVGL 7とArdu
 
 現在の実機ラッパーは[GarVibeRemote-M5StickC](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/firmware/stickc-plus2/README.md)の
 `firmware/stickc-plus2/`です。同ProductのWebシミュレータも、このUIをWASMとして使用します。
-`../m5stickc-client/`は別のWi-Fiクライアントで、この縦画面やA／B／C操作を組み込みません。
+実機との接続はProductのUSB／SPP中継で行います。
 
 ## 表示と操作
 

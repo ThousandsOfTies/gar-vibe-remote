@@ -9,7 +9,6 @@ import {
   buildStartPowerShellCommand,
   buildStatusPowerShellCommand,
   buildStopPowerShellCommand,
-  defaultApprovalBrokerPort,
   isWsl,
   parseProcessList,
   powerShellPath
@@ -148,8 +147,11 @@ export class ApprovalBrokerManager implements vscode.Disposable {
     return {
       enabled: cfg.get<boolean>('enabled', false),
       dryRun: cfg.get<boolean>('dryRun', true),
-      host: cfg.get<string>('host', '127.0.0.1'),
-      port: cfg.get<number>('port', defaultApprovalBrokerPort()),
+      host: '127.0.0.1',
+      port: cfg.get<number>(
+        'port',
+        vscode.workspace.getConfiguration('vibeRemote').get<number>('port', 39271)
+      ),
       pollSeconds: cfg.get<number>('pollSeconds', 2),
       decisionTimeoutSeconds: cfg.get<number>('decisionTimeoutSeconds', 60),
       logPath: cfg.get<string>('logPath', '/tmp/vibe-approval-broker.log')

@@ -6,15 +6,14 @@ VS Codeを起動する必要はありません。実機の接続、チャット�
 
 ## どの実装を使うか
 
-| 用途                              | 実装・手順                                                                                                                                                             | 操作・接続                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| 現在のM5StickC Plus2              | [Product導入手順](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/README.md)、Productの`firmware/stickc-plus2/`、[CompactUi](compact-ui/README.md) | USB／SPP。Cで選択、Aで決定、Bで一覧／戻る         |
-| Plus2のWebシミュレータ            | 同じProductの`simulation/`とCompactUiのWASM                                                                                                                            | 実機と同じ画面。`?live=1`は本番状態の閲覧専用     |
-| 別実装のWi-Fiクライアント         | [m5stickc-client](m5stickc-client/README.md)                                                                                                                           | Wi-Fi／mDNS／WebSocket。Aで決定、Bで選択、Pで戻る |
-| 旧T-WatchのタッチUI・Hook実行承認 | [旧構成の記録](docs-codex-touch-legacy.md)                                                                                                                             | タッチ／長押し。現在のPlus2の手順には使用しない   |
+| 用途                              | 実装・手順                                                                                                                                                             | 操作・接続                                      |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 現在のM5StickC Plus2              | [Product導入手順](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/README.md)、Productの`firmware/stickc-plus2/`、[CompactUi](compact-ui/README.md) | USB／SPP。Cで選択、Aで決定、Bで一覧／戻る       |
+| Plus2のWebシミュレータ            | 同じProductの`simulation/`とCompactUiのWASM                                                                                                                            | 実機と同じ画面。`?live=1`は本番状態の閲覧専用   |
+| 旧T-WatchのタッチUI・Hook実行承認 | [旧構成の記録](docs-codex-touch-legacy.md)                                                                                                                             | タッチ／長押し。現在のPlus2の手順には使用しない |
 
-`m5stickc-client/src/main.cpp`はWi-Fi版のファイルです。現在のPlus2 Productはこのファイルをビルドせず、
-Product内の実機ラッパーと、このAppの`compact-ui/`を組み合わせます。
+Plus2はProduct内の`firmware/stickc-plus2/`と、このAppの`compact-ui/`を組み合わせます。
+デバイス接続はUSB／SPPです。旧Wi-FiファームウェアとLAN向けの探索・中継は削除しました。
 
 ## 入出力と責務
 

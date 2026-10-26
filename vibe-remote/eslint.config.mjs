@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'm5stickc-client/.pio/**', 'm5stickc-client/.tools/**']
+    ignores: ['dist/**', 'node_modules/**']
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

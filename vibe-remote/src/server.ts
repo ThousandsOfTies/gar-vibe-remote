@@ -19,7 +19,6 @@ export interface RemoteClient {
 
 export interface ServerOptions {
   port: number;
-  host: string;
   token: string;
   idleThresholdMs: number;
   pollIntervalMs: number;
@@ -56,7 +55,7 @@ export class RemoteServer implements vscode.Disposable {
   start(): void {
     this.wss = new WebSocketServer({
       port: this.opts.port,
-      host: this.opts.host
+      host: '127.0.0.1'
     });
 
     this.wss.on('connection', (socket, req) => {
@@ -84,9 +83,7 @@ export class RemoteServer implements vscode.Disposable {
     });
 
     this.wss.on('listening', () => {
-      this.log(
-        `待受開始 ws://${this.opts.host}:${this.opts.port} (token: ${maskToken(this.opts.token)})`
-      );
+      this.log(`待受開始 ws://127.0.0.1:${this.opts.port} (token: ${maskToken(this.opts.token)})`);
     });
 
     // 定期ポーリングで状態を配信
