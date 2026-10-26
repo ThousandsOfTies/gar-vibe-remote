@@ -286,7 +286,7 @@ void CompactUi::render() {
     lv_obj_set_hidden(listRows_[i],!show);
     if(show) {
       const auto& entry=sessions_[index];const bool focus=index==listFocus_;
-      box(listRows_[i],sessionBackground(connected_?entry.status:"idle"),focus?3:1,0x000000);
+      box(listRows_[i],sessionBackground(connected_?entry.status:"idle"),focus?3:1,focus?0xffffff:0x000000);
       lv_label_set_text(listIcons_[i],icon(entry.status));
       lv_obj_set_style_local_text_color(listIcons_[i],LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(0x000000));
       lv_label_set_text(listLabels_[i],shorten(entry.name.empty()?stateName(entry.status):entry.name,86).c_str());
