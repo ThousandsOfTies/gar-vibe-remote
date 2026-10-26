@@ -1,4 +1,11 @@
-# Vibe Remote — Project Handoff
+# Vibe Remote — VS Code / Wi-Fi Handoff (historical)
+
+This is the 2026-07-05 handoff for the VS Code approval broker and Wi-Fi client.
+Its "current" status, firmware paths, and button mapping refer to that implementation.
+For the later Codex / Plus2 Product, start with the
+[repository index](../README.md), [Codex bridge](../vibe-remote/docs-codex-bridge.md),
+and [CompactUi](../vibe-remote/compact-ui/README.md).
+Do not use this handoff's Wi-Fi firmware or button mapping for GarVibeRemote-M5StickC.
 
 Last updated: 2026-07-05
 

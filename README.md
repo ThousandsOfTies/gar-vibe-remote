@@ -1,5 +1,23 @@
 # gar-vibe-ui
 
+Shared Vibe Remote code includes the Codex status bridge, the portrait Plus2 UI,
+and the earlier VS Code approval-broker / Wi-Fi client implementation.
+
+| Working on                                            | Start here                                                                                                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Current GarVibeRemote-M5StickC Product                | [Product README](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/README.md) and its `firmware/stickc-plus2/` |
+| Codex status / multiple chats / ordinary choice cards | [Codex bridge](vibe-remote/docs-codex-bridge.md)                                                                                 |
+| Shared portrait 135×240 UI and A / B / C navigation   | [CompactUi](vibe-remote/compact-ui/README.md)                                                                                    |
+| Earlier VS Code approval broker and Wi-Fi firmware    | The sections below and [Wi-Fi client](vibe-remote/m5stickc-client/README.md)                                                     |
+
+The current Plus2 Product does not build `m5stickc-client/src/main.cpp` and does
+not require Wi-Fi or the VS Code approval broker. Its device transport, setup,
+and Codex App adapters live in the Product repository; this repository supplies
+the shared bridge and UI. A branch name is not a firmware target: the Product's
+submodule commit and `firmware/stickc-plus2/platformio.ini` select the source and build.
+
+## Earlier VS Code approval-broker implementation
+
 Vibe Remote lets a small physical device approve VS Code host confirmations.
 The current implementation watches VS Code's `Run bash command?` approval UI
 with Windows UI Automation, mirrors the approval to Vibe Remote, and then
@@ -25,7 +43,7 @@ vibe-remote/
   VS Code extension, Local Bridge, Approval Broker, and device clients
 ```
 
-## Current Status
+## VS Code Broker Status
 
 - UIA Approval Broker is implemented for VS Code `Run bash command?` approvals.
 - Token-protected WebSocket status/UI channel is implemented.
@@ -93,7 +111,7 @@ Useful settings:
 Keep `dryRun` enabled while testing detection. With `dryRun: false`, selecting
 `Allow` or `Skip` on Vibe Remote invokes the matching VS Code button.
 
-## M5StickC Client
+## Wi-Fi M5StickC Client (separate from the Plus2 Product)
 
 The M5StickC client connects over Wi-Fi, discovers `_vibe-remote._tcp.local`,
 opens a WebSocket, renders device UI payloads, and sends A / B / P button

@@ -1,5 +1,11 @@
 # Vibe Remote Approval Bridge
 
+This package also supplies the shared [Codex status bridge](docs-codex-bridge.md)
+and [CompactUi portrait UI](compact-ui/README.md) used by
+[GarVibeRemote-M5StickC](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/README.md).
+For that Product, use its USB/SPP firmware and setup instructions. The VS Code
+approval-broker and Wi-Fi/mDNS steps below are a separate implementation.
+
 This package runs a local Vibe Remote bridge. It watches VS Code approval UI with Windows UI Automation and mirrors pending bash approvals to a physical Vibe Remote device.
 
 ## Features

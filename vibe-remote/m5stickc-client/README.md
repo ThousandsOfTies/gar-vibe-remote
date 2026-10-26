@@ -1,4 +1,9 @@
-# Vibe Remote M5StickC Client
+# Vibe Remote M5StickC Wi-Fi Client
+
+このディレクトリはWi-Fi／WebSocketを使う旧クライアントです。現在の
+[GarVibeRemote-M5StickC](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/README.md)のUSB／SPPファームウェアではありません。
+現在のPlus2はProduct内の`firmware/stickc-plus2/`と共有[CompactUi](../compact-ui/README.md)を使います。
+以下のA／B／Pの対応やWi-Fi設定を、現行ProductのC選択／A決定／B一覧と混同しないでください。
 
 M5StickC / M5StickC Plus2 を Vibe Remote の小型リモコンにする firmware です。
 
@@ -75,11 +80,11 @@ make wokwi-workspace \
 
 ## Buttons
 
-| 操作 | 動作 |
-| --- | --- |
-| A | 選択 / 決定 |
-| B | メニュー移動 |
-| P | 戻る |
+| 操作   | 動作           |
+| ------ | -------------- |
+| A      | 選択 / 決定    |
+| B      | メニュー移動   |
+| P      | 戻る           |
 | A hold | A長押し action |
 | B hold | B長押し action |
 | P hold | P長押し action |

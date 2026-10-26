@@ -4,6 +4,10 @@ M5StickC Plus2向け**135×240の縦画面**。C++の`CompactUi`はLVGL 7とArdu
 ブラウザ・通信・GPIO処理を持ちません。実機にはLVGLの表示ドライバと物理ボタンのedgeを接続します。
 日本語フォントは`../touch-ui/vibe_jp_16.c`を共有します（同ディレクトリのOFL.txt参照）。
 
+現在の実機ラッパーは[GarVibeRemote-M5StickC](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickC/blob/main/firmware/stickc-plus2/README.md)の
+`firmware/stickc-plus2/`です。同ProductのWebシミュレータも、このUIをWASMとして使用します。
+`../m5stickc-client/`は別のWi-Fiクライアントで、この縦画面やA／B／C操作を組み込みません。
+
 ## 表示と操作
 
 本文は9px/秒で縦スクロールします。先頭で1.8秒、末尾で2.8秒停止してループします。
@@ -14,10 +18,10 @@ M5StickC Plus2向け**135×240の縦画面**。C++の`CompactUi`はLVGL 7とArdu
 外枠は液晶端から2px内側の4px幅で、入力待ちは`#9c263b`です。
 実機のベゼルで隠れにくい独立したLVGL枠を、シミュレータでも同じ座標に描きます。
 
-| 場面 | C短押し | A短押し | B短押し |
-| --- | --- | --- | --- |
-| 本文・回答 | 選択肢を順にフォーカス（末尾から先頭へ） | 選択中の回答を送信 | セッション一覧を開く |
-| セッション一覧 | 次のセッションへ（末尾から先頭へ） | セッションを選択して戻る | 切り替えずに戻る |
+| 場面           | C短押し                                  | A短押し                  | B短押し              |
+| -------------- | ---------------------------------------- | ------------------------ | -------------------- |
+| 本文・回答     | 選択肢を順にフォーカス（末尾から先頭へ） | 選択中の回答を送信       | セッション一覧を開く |
+| セッション一覧 | 次のセッションへ（末尾から先頭へ）       | セッションを選択して戻る | 切り替えずに戻る     |
 
 YES／NOではNOを初期選択。その他は先頭の候補を選択します。Aは押して離した時に決定します。
 受領確認前に切断した場合は送信待ちを解除し、PCでの確認を促します。再接続だけで回答を再送しません。
@@ -37,30 +41,50 @@ Cは物理電源スイッチを兼ねるため、1秒以上のC入力を選択�
 単一セッションの更新は既存`state`形式です。`session.id`は必須で、同じIDの状態を更新します。
 
 ```json
-{"type":"state","session":{"id":"s1","name":"画面の改善"},"ui":{"id":"q1","state":"waiting","message":"続けますか？","actions":[{"id":"yes","label":"YES","button":"A"},{"id":"no","label":"NO","button":"B"}]}}
+{
+  "type": "state",
+  "session": { "id": "s1", "name": "画面の改善" },
+  "ui": {
+    "id": "q1",
+    "state": "waiting",
+    "message": "続けますか？",
+    "actions": [
+      { "id": "yes", "label": "YES", "button": "A" },
+      { "id": "no", "label": "NO", "button": "B" }
+    ]
+  }
+}
 ```
 
 `sessions`は全件のスナップショットです。各要素は上記stateの内容で、含まれないセッションは除去します。
 全要素を検証してからまとめて反映し、IDで選択とフォーカスを維持します。選択対象が消えた場合は先頭へ戻します。
 
 ```json
-{"type":"sessions","sessions":[{"session":{"id":"s1","name":"調査"},"agent":{"status":"running","message":"調査中です"}}]}
+{
+  "type": "sessions",
+  "sessions": [
+    {
+      "session": { "id": "s1", "name": "調査" },
+      "agent": { "status": "running", "message": "調査中です" }
+    }
+  ]
+}
 ```
 
 出力は`uiAction`。`button`は選択肢に付随する既存プロトコル情報で、今回押した物理ボタン（常にA）とは別です。
 PC側ではセッションID・質問ID・回答IDを照合して対象へ配送します。
 
 ```json
-{"type":"uiAction","sessionId":"s1","uiId":"q1","actionId":"yes","button":"A"}
+{ "type": "uiAction", "sessionId": "s1", "uiId": "q1", "actionId": "yes", "button": "A" }
 ```
 
 受信確認には3つのIDと真偽値の`ok`が必要です。別セッションを表示中でも対象の状態だけを更新します。
 `ok:false`では選び直し・再送が可能です。`ok:true`では次の質問まで重複送信しません。
 
 ```json
-{"type":"ack","sessionId":"s1","uiId":"q1","actionId":"yes","ok":true}
+{ "type": "ack", "sessionId": "s1", "uiId": "q1", "actionId": "yes", "ok": true }
 ```
 
 1パケットは64KiBまで、本文は8KiBまで、表示用の高さは30,000pxまでです。
 上限超過、セッションや選択肢のID重複、不完全なスナップショットは拒否します。
-BLE/SPP transport・PCの実セッション収集は別実装です。
+USB／SPP transport・PCの実セッション収集はProduct側の別実装です。BLEは未実装です。
