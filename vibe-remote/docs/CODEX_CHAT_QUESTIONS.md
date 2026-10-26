@@ -9,7 +9,23 @@ another application's UI.
 An authenticated `POST /chat-questions` supplies an authoritative snapshot:
 
 ```json
-{"kind":"chat-choice","sessionId":"selected-chat","owner":"stable-private-adapter-id","questions":[{"id":"original-question-id","question":"Question and full choices","options":[{"id":"option-0","label":"First"},{"id":"option-1","label":"Second"}]}],"delivered":[],"failed":[]}
+{
+  "kind": "chat-choice",
+  "sessionId": "selected-chat",
+  "owner": "stable-private-adapter-id",
+  "questions": [
+    {
+      "id": "original-question-id",
+      "question": "Question and full choices",
+      "options": [
+        { "id": "option-0", "label": "First" },
+        { "id": "option-1", "label": "Second" }
+      ]
+    }
+  ],
+  "delivered": [],
+  "failed": []
+}
 ```
 
 Poll at intervals shorter than five seconds. The response's `answers` contains
@@ -33,7 +49,20 @@ The authenticated `POST /sessions` route takes an authoritative roster with a
 15-second owner lease:
 
 ```json
-{"kind":"codex-sessions","owner":"stable-private-collector-id","sessions":[{"id":"chat-a","name":"Original chat title","kind":"codex","hostId":"local","cwd":"D:\\Example","status":{"type":"active","activeFlags":[]}}]}
+{
+  "kind": "codex-sessions",
+  "owner": "stable-private-collector-id",
+  "sessions": [
+    {
+      "id": "chat-a",
+      "name": "Original chat title",
+      "kind": "codex",
+      "hostId": "local",
+      "cwd": "D:\\Example",
+      "status": { "type": "active", "activeFlags": [] }
+    }
+  ]
+}
 ```
 
 The bridge enforces local Codex, scope, duplicate IDs and the 16-session bound.
