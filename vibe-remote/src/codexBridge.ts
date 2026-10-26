@@ -11,13 +11,8 @@ import type { StateMessage, SessionsMessage } from './protocol';
 export interface CodexBridgeOptions extends SessionOptions {
   token: string;
   port?: number;
-  sessionId?: string;
-  label?: string;
-  freshnessMs?: number;
   now?: () => number;
   watchInput?: boolean;
-  chatQuestions?: boolean;
-  chatQuestionSources?: string[];
 }
 
 export async function startCodexBridge(options: CodexBridgeOptions) {
