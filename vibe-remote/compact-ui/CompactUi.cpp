@@ -187,7 +187,10 @@ bool CompactUi::receive(const char* json) {
     sessions_=std::move(next);
     selected_=find(selectedId);if(selected_<0){selected_=0;changedSelected=true;}
     listFocus_=find(focusId);if(listFocus_<0)listFocus_=selected_;
-    if(changedSelected || (listOpen_ && changedList))invalidate();
+    // A list gesture selects a session identity, not an answer. Live text/status
+    // changes underneath it must not cancel B/C/A navigation. Membership/order
+    // changes still cancel list confirmation; answer gestures stay guarded.
+    if((changedSelected && !listOpen_ && pressed_!='B') || (listOpen_ && changedList))invalidate();
     dirty_=true;refresh();return true;
   }
   if(type!="state")return false;
@@ -198,7 +201,7 @@ bool CompactUi::receive(const char* json) {
     if(listOpen_ || sessions_.empty())invalidate();
     sessions_.push_back(std::move(next));
   } else {
-    if(!merge(next,sessions_[old])) { discardOutgoing(next.id);if(old==selected_)invalidate(); }
+    if(!merge(next,sessions_[old])) { discardOutgoing(next.id);if(old==selected_ && !listOpen_ && pressed_!='B')invalidate(); }
     sessions_[old]=std::move(next);
   }
   dirty_=true;refresh();return true;
