@@ -1,4 +1,4 @@
-# gar-vibe-ui
+# gar-vibe-remote
 
 Vibe Remoteの共有コードです。Codexの状態・質問ブリッジと、M5StickC Plus2向けの縦画面UIを提供します。
 実機はBluetooth Classic SPPまたはUSBシリアルでPCへ接続します。

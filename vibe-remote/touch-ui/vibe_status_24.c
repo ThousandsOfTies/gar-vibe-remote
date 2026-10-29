@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 24 px
  * Bpp: 2
- * Opts: --font artifacts/font-tools/NotoSansCJKjp-Regular.otf --symbols 確認待ち実行中完了エラー機 --size 24 --bpp 2 --format lvgl --no-kerning --lv-include lvgl/lvgl.h --lv-font-name vibe_status_24 -o D:\Yurufuwa\GarVibeRemote-TWatch2020\sources\gar-vibe-ui\vibe-remote\touch-ui\vibe_status_24.c
+ * Opts: --font artifacts/font-tools/NotoSansCJKjp-Regular.otf --symbols 確認待ち実行中完了エラー機 --size 24 --bpp 2 --format lvgl --no-kerning --lv-include lvgl/lvgl.h --lv-font-name vibe_status_24 -o D:\Yurufuwa\GarVibeRemote-TWatch2020\sources\gar-vibe-remote\vibe-remote\touch-ui\vibe_status_24.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
