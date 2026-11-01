@@ -1,7 +1,8 @@
 # gar-vibe-remote
 
 Vibe Remoteの共有コードです。Codexの状態・質問ブリッジと、M5StickC Plus2向けの縦画面UIを提供します。
-実機はBluetooth Classic SPPまたはUSBシリアルでPCへ接続します。
+Plus2はBluetooth Classic SPP／USB、StickS3はBLE GATT／USBのアダプターで接続します。
+接続方式の追加は共通アプリの表示・質問形式を変えずに行います。
 
 | 用途                                            | 入口                                                                                                    |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -15,6 +16,9 @@ Vibe Remoteの共有コードです。Codexの状態・質問ブリッジと、M
 この共有リポジトリから実機へ書き込む専用ファームウェアは提供しません。
 Wi-Fi端末、LAN向け待受、mDNS広告、Local Bridgeは削除しました。
 PC内の認証付きWebSocketは、状態ブリッジ・実機中継・閲覧用シミュレータの間で使用します。
+
+StickS3のProductは [GarVibeRemote-M5StickS3](https://github.com/ThousandsOfTies/GarVibeRemote-M5StickS3) です。
+実機での検証状況は各Productの記録を参照してください。
 
 ## 構成
 

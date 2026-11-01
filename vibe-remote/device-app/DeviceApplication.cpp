@@ -17,17 +17,19 @@ void DeviceApplication::updateHardware() {
 void DeviceApplication::hardware(const Hardware& hardware) {
   if(hardware.powered==hardware_.powered && hardware.sppReady==hardware_.sppReady &&
      hardware.sppClient==hardware_.sppClient && hardware.battery==hardware_.battery &&
-     hardware.width==hardware_.width && hardware.height==hardware_.height && hardware.board==hardware_.board)return;
+     hardware.width==hardware_.width && hardware.height==hardware_.height && hardware.board==hardware_.board && hardware.bleReady==hardware_.bleReady && hardware.bleClient==hardware_.bleClient)return;
   const bool streamChanged=hardware.sppClient!=hardware_.sppClient ||
     hardware.sppReady!=hardware_.sppReady;
   const bool poweredOff=hardware_.powered && !hardware.powered;
+  const bool bleChanged=hardware.bleReady!=hardware_.bleReady || hardware.bleClient!=hardware_.bleClient;
   hardware_=hardware;
   if(streamChanged) {
     sppLines_.reset();
     if(!hardware_.sppClient || !hardware_.sppReady)lease_.release(Transport::spp);
   }
+  if(bleChanged){bleLines_.reset();lease_.release(Transport::ble);}
   if(poweredOff) {
-    usbLines_.reset();sppLines_.reset();lease_.release(Transport::usb);lease_.release(Transport::spp);
+    usbLines_.reset();sppLines_.reset();bleLines_.reset();lease_.release(Transport::usb);lease_.release(Transport::spp);lease_.release(Transport::ble);
     for(char key:std::string("ABC"))ui_.button(key,-1);
   }
   updateHardware();
@@ -35,10 +37,11 @@ void DeviceApplication::hardware(const Hardware& hardware) {
 void DeviceApplication::send(Transport link,const JsonDocument& document) const {
   if(link==Transport::none)return;
   if(link==Transport::spp && (!hardware_.sppReady || !hardware_.sppClient))return;
+  if(link==Transport::ble && (!hardware_.bleReady || !hardware_.bleClient))return;
   std::string packet;serializeJson(document,packet);packet+='\n';send_(link,packet);
 }
 void DeviceApplication::pairingInfo(JsonDocument& document) const {
-  document["pairingMode"]="ssp-numeric-comparison";document["pairingState"]=pairing_.state();
+  document["pairingMode"]=identity_.pairingMode;document["pairingState"]=pairing_.state();
   document["authenticationAttempts"]=authenticationAttempts_;
   document["lastAuthentication"]=lastAuthentication_>0?"success":lastAuthentication_<0?"failed":"not-observed";
 }
@@ -59,8 +62,8 @@ void DeviceApplication::pairingRequested(uint32_t number) {
   if(!hardware_.powered)return;
   if(lease_.owner()!=Transport::none) { confirm_(false);return; }
   pairing_.begin(lv_tick_get());
-  char message[240];std::snprintf(message,sizeof(message),
-    "番号 %06lu\nPCと同じ番号ですか？\nCでYESを選び、Aで決定してください。",static_cast<unsigned long>(number));
+  char message[400];std::snprintf(message,sizeof(message),
+    "番号 %06lu\nPCと同じ番号ですか？\n%s",static_cast<unsigned long>(number),identity_.pairingInstruction.c_str());
   pairingScreen(message,true);
 }
 void DeviceApplication::authenticated(bool success) {
@@ -73,6 +76,7 @@ void DeviceApplication::hello(Transport link) const {
   JsonDocument document;document["type"]="deviceInfo";document["device"]=identity_.device;
   document["protocol"]="gar-compact-v1";document["firmware"]=identity_.firmware;
   document["transport"]=name(link);document["activeTransport"]=name(lease_.owner());
+  document["bleReady"]=hardware_.bleReady;document["bleClient"]=hardware_.bleClient;
   document["bluetoothName"]=identity_.bluetoothName;document["sppReady"]=hardware_.sppReady;
   document["width"]=hardware_.width;document["height"]=hardware_.height;
   document["board"]=hardware_.board;document["battery"]=hardware_.battery;
@@ -81,7 +85,7 @@ void DeviceApplication::hello(Transport link) const {
 std::string DeviceApplication::snapshot() const {
   JsonDocument document;deserializeJson(document,ui_.snapshot());
   document["activeTransport"]=name(lease_.owner());document["sppReady"]=hardware_.sppReady;
-  document["sppClient"]=hardware_.sppClient;pairingInfo(document);
+  document["sppClient"]=hardware_.sppClient;document["bleReady"]=hardware_.bleReady;document["bleClient"]=hardware_.bleClient;pairingInfo(document);
   std::string packet;serializeJson(document,packet);return packet;
 }
 void DeviceApplication::receive(Transport link,const std::string& packet) {
@@ -109,17 +113,21 @@ void DeviceApplication::receive(Transport link,const std::string& packet) {
   }
 }
 void DeviceApplication::feed(Transport link,const char* bytes,size_t size) {
-  if(!hardware_.powered || (link!=Transport::usb && link!=Transport::spp))return;
+  if(!hardware_.powered || (link!=Transport::usb && link!=Transport::spp && link!=Transport::ble))return;
   if(link==Transport::spp && (!hardware_.sppReady || !hardware_.sppClient))return;
-  auto& lines=link==Transport::usb?usbLines_:sppLines_;
+  if(link==Transport::ble && (!hardware_.bleReady || !hardware_.bleClient))return;
+  // A negotiated small MTU can take longer than a heartbeat interval to carry
+  // one full JSON line. Only traffic on the existing BLE owner renews it.
+  if(link==Transport::ble && size && lease_.owner()==link)lease_.renew(link,lv_tick_get());
+  auto& lines=link==Transport::usb?usbLines_:link==Transport::spp?sppLines_:bleLines_;
   for(size_t i=0;i<size;++i)lines.byte(bytes[i],[&](const std::string& packet){receive(link,packet);});
 }
 void DeviceApplication::resetTransport(Transport link) {
-  if(link==Transport::usb)usbLines_.reset();else if(link==Transport::spp)sppLines_.reset();else return;
+  if(link==Transport::usb)usbLines_.reset();else if(link==Transport::spp)sppLines_.reset();else if(link==Transport::ble)bleLines_.reset();else return;
   if(lease_.release(link))updateHardware();
 }
 void DeviceApplication::discardTransport(Transport link) {
-  if(link==Transport::usb)usbLines_.discard();else if(link==Transport::spp)sppLines_.discard();
+  if(link==Transport::usb)usbLines_.discard();else if(link==Transport::spp)sppLines_.discard();else if(link==Transport::ble)bleLines_.discard();
 }
 void DeviceApplication::button(char key,int phase) {
   if(!hardware_.powered || (key!='A' && key!='B' && key!='C'))return;
@@ -147,7 +155,7 @@ void DeviceApplication::step() {
     }
   } else if(!action.empty() && lease_.owner()!=Transport::none) {
     JsonDocument document;deserializeJson(document,action);
-    document["source"]=identity_.sourcePrefix+(lease_.owner()==Transport::spp?"-spp":"-usb");
+    document["source"]=identity_.sourcePrefix+(lease_.owner()==Transport::ble?"-ble":lease_.owner()==Transport::spp?"-spp":"-usb");
     send(lease_.owner(),document);
   }
 }

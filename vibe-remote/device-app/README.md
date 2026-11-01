@@ -1,6 +1,6 @@
 # Portable compact remote application
 
-`DeviceApplication` composes CompactUi, JSONL framing, USB/SPP ownership and
+`DeviceApplication` composes CompactUi, JSONL framing, USB/SPP/BLE ownership and
 leases, pairing consent, and outgoing answers. It has no Arduino, M5Unified,
 GPIO numbers, Bluetooth stack, display driver or board initialization.
 
@@ -16,3 +16,8 @@ CompactUi owns C/select, A/confirm and B/list behavior. Bluetooth callback
 threading, pairing transport, power control and LCD flushing belong to the board
 adapter. PC chat discovery, enrollment and the choice of scenarios belong to
 the composing Product. No board model is inferred by this application.
+
+BLE uses its own byte buffer and lease identity. Hardware bleReady/bleClient
+are separate from SPP. Identity can select the pairing-mode label and physical
+button instruction; defaults preserve existing Plus2 behavior. setInputHints
+configures the visible hints without moving physical key policy into this app.

@@ -4,9 +4,9 @@
 #include <string>
 
 namespace vibe {
-enum class Transport { none, usb, spp };
+enum class Transport { none, usb, spp, ble };
 inline const char* name(Transport link) {
-  return link==Transport::spp ? "bluetooth-spp" : link==Transport::usb ? "usb-serial" : "none";
+  return link==Transport::ble ? "bluetooth-ble" : link==Transport::spp ? "bluetooth-spp" : link==Transport::usb ? "usb-serial" : "none";
 }
 class JsonLines {
  public:

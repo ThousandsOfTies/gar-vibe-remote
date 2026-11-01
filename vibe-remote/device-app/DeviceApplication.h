@@ -14,9 +14,11 @@ class DeviceApplication {
   struct Hardware {
     bool powered=true, sppReady=false, sppClient=false;
     int battery=0, width=0, height=0, board=0;
+    bool bleReady=false, bleClient=false;
   };
   struct Identity {
     std::string device, firmware, bluetoothName, sourcePrefix;
+    std::string pairingMode="ssp-numeric-comparison", pairingInstruction="CでYESを選び、Aで決定してください。";
   };
   using Send = std::function<void(Transport,const std::string&)>;
   using ConfirmPairing = std::function<void(bool)>;
@@ -36,7 +38,7 @@ class DeviceApplication {
   std::string snapshot() const;
  private:
   vibe::CompactUi ui_;
-  JsonLines usbLines_,sppLines_;
+  JsonLines usbLines_,sppLines_,bleLines_;
   DeviceLease lease_;
   PairingConsent pairing_;
   Hardware hardware_;
