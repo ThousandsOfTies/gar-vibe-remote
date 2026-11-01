@@ -383,7 +383,7 @@ void CompactUi::render() {
   }
   if(listOpen_ && sessions_.empty()) {
     lv_obj_set_height(viewport_,fullHeight);lv_label_set_text(body_,"セッションは\nありません");
-    lv_obj_set_height(body_,fullHeight);lv_obj_set_y(body_,0);lv_label_set_text(footer_,"B:戻る");
+    lv_obj_set_height(body_,fullHeight);lv_obj_set_y(body_,0);lv_label_set_text(footer_,hints_.back.c_str());
   } else if(!listOpen_) {
     const int height=options?questionHeight:fullHeight;lv_obj_set_height(viewport_,height);
     std::string body;int y=0;
@@ -397,8 +397,8 @@ void CompactUi::render() {
     lv_label_set_text(body_,body.c_str());
     lv_obj_set_height(body_,std::max(height,(1+(int)std::count(body.begin(),body.end(),'\n'))*vibe_jp_16.line_height));
     lv_obj_set_y(body_,y);
-    lv_label_set_text(footer_,options?"C:選択 A:決定":"B:一覧");
-  } else lv_label_set_text(footer_,"C:次 A:決定");
+    lv_label_set_text(footer_,options?hints_.choices.c_str():hints_.list.c_str());
+  } else lv_label_set_text(footer_,hints_.next.c_str());
 }
 std::string CompactUi::snapshot() const {
   JsonDocument d;const auto* s=current();
@@ -423,7 +423,7 @@ std::string CompactUi::snapshot() const {
     auto entry=sessions.add<JsonObject>();entry["id"]=sessions_[i].id;entry["name"]=sessions_[i].name;entry["state"]=sessions_[i].status;
     entry["selected"]=(int)i==selected_;entry["focused"]=listOpen_ && (int)i==listFocus_;entry["pending"]=sessions_[i].pending;
   }
-  if(listOpen_)d["label"]=sessions_.empty()?"セッションはありません":"セッション一覧。"+sessions_[listFocus_].name+"。Cで次、Aで決定。";
+  if(listOpen_)d["label"]=sessions_.empty()?"セッションはありません":"セッション一覧。"+sessions_[listFocus_].name+"。"+hints_.accessible;
   else d["label"]=s?s->name+"。"+stateName(s->status)+"。"+s->message:"セッションを待っています";
   std::string out;serializeJson(d,out);return out;
 }

@@ -21,6 +21,7 @@ class DeviceApplication {
   using Send = std::function<void(Transport,const std::string&)>;
   using ConfirmPairing = std::function<void(bool)>;
   DeviceApplication(Identity identity,Send send,ConfirmPairing confirm);
+  void setInputHints(const CompactUi::InputHints& hints) { ui_.setInputHints(hints); }
   void begin(const Hardware& hardware);
   void hardware(const Hardware& hardware);
   void feed(Transport link,const char* bytes,size_t size);

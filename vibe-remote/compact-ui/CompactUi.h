@@ -10,6 +10,10 @@ namespace vibe {
 // connection facts and an LVGL display/clock. No transport or GPIO dependency.
 class CompactUi {
  public:
+  struct InputHints {
+    std::string choices="C:選択 A:決定", list="B:一覧", back="B:戻る", next="C:次 A:決定", accessible="Cで次、Aで決定。";
+  };
+  void setInputHints(const InputHints& hints) { hints_=hints; dirty_=true; }
   void begin();
   bool receive(const char* json);
   void hardware(bool powered, bool connected, int battery);
@@ -18,6 +22,7 @@ class CompactUi {
   std::string snapshot() const;
   std::string takeAction();
  private:
+  InputHints hints_;
   struct Action { std::string id, label, button; };
   struct Session {
     std::string id, name, uiId, status="idle", message, wrapped, pending, error;
