@@ -7,6 +7,12 @@ on:
   workflow_dispatch:
 
 jobs:
+  device-protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: g++ -std=c++17 -Ivibe-remote/device-app tests/device_link.cpp -o /tmp/device-link-test
+      - run: /tmp/device-link-test
   vibe-remote:
     runs-on: ubuntu-latest
     defaults:
