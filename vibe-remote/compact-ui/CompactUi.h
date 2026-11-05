@@ -16,8 +16,13 @@ class CompactUi {
   void setInputHints(const InputHints& hints) { hints_=hints; dirty_=true; }
   void begin();
   bool receive(const char* json);
-  void hardware(bool powered, bool connected, int battery);
+  void hardware(bool powered, bool connected, int battery, bool charging=false);
   void button(char key, int phase); // 1 down, 0 up, -1 cancel
+  bool allSessionsIdle() const {
+    if(sessions_.empty())return false;
+    for(const auto& s:sessions_)if(s.status!="idle" || !s.pending.empty())return false;
+    return true;
+  }
   void refresh();
   std::string snapshot() const;
   std::string takeAction();
@@ -35,7 +40,7 @@ class CompactUi {
   struct Outgoing { std::string sessionId, json; };
   static constexpr int maxSessions=16, maxActions=8, scrollSpeed=9;
   static constexpr int textWidth=117, textTop=60, questionHeight=90, fullHeight=148;
-  lv_obj_t *root_=nullptr, *frame_=nullptr, *icon_=nullptr, *nameBand_=nullptr, *name_=nullptr, *batteryLabel_=nullptr,
+  lv_obj_t *root_=nullptr, *frame_=nullptr, *icon_=nullptr, *nameBand_=nullptr, *name_=nullptr, *batteryLabel_=nullptr, *chargingLabel_=nullptr,
     *viewport_=nullptr, *body_=nullptr, *footer_=nullptr, *counter_=nullptr;
   lv_obj_t* optionRows_[2]{};
   lv_obj_t* optionLabels_[2]{};
@@ -46,6 +51,7 @@ class CompactUi {
   std::deque<Outgoing> outgoing_;
   bool powered_=true, connected_=true, listOpen_=false, dirty_=true;
   bool selectionLost_=true;
+  bool charging_=false;
   int battery_=82, selected_=0, listFocus_=0;
   unsigned generation_=0, pressGeneration_=0, heldButtons_=0;
   uint64_t waitingSequence_=0;

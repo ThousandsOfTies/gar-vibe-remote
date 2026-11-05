@@ -14,7 +14,7 @@ class DeviceApplication {
   struct Hardware {
     bool powered=true, sppReady=false, sppClient=false;
     int battery=0, width=0, height=0, board=0;
-    bool bleReady=false, bleClient=false;
+    bool bleReady=false, bleClient=false, charging=false;
   };
   struct Identity {
     std::string device, firmware, bluetoothName, sourcePrefix;
@@ -34,6 +34,7 @@ class DeviceApplication {
   void button(char key,int phase);
   void pairingRequested(uint32_t number);
   void authenticated(bool success);
+  bool allSessionsIdle() const {return !pairing_.active() && ui_.allSessionsIdle();}
   void step();
   std::string snapshot() const;
  private:

@@ -80,7 +80,8 @@ void CompactUi::begin() {
   root_=lv_obj_create(nullptr,nullptr);lv_obj_set_size(root_,135,240);box(root_,0x090e0d,0,0);
   icon_=label(root_,9,10,19,&lv_font_montserrat_16);
   counter_=label(root_,37,12,51,&lv_font_montserrat_12);
-  batteryLabel_=label(root_,94,12,34,&lv_font_montserrat_12);
+  batteryLabel_=label(root_,88,12,32,&lv_font_montserrat_12);
+  chargingLabel_=label(root_,120,12,9,&lv_font_montserrat_12);
   nameBand_=lv_obj_create(root_,nullptr);lv_obj_set_pos(nameBand_,9,29);lv_obj_set_size(nameBand_,textWidth,26);
   box(nameBand_,sessionBackground("idle"),0,0);
   name_=label(nameBand_,4,3,textWidth-8,&vibe_jp_16);
@@ -283,13 +284,13 @@ bool CompactUi::receive(const char* json) {
   if(received.status=="waiting" && !received.waitingOrder)received.waitingOrder=++waitingSequence_;
   dirty_=true;refresh();return true;
 }
-void CompactUi::hardware(bool powered,bool connected,int battery) {
+void CompactUi::hardware(bool powered,bool connected,int battery,bool charging) {
   refresh();
   if(powered_!=powered || connected_!=connected) { invalidate();outgoing_.clear();listOpen_=false; }
   if(connected_ && !connected)for(auto& s:sessions_)if(!s.pending.empty() && !s.acknowledged) {
     s.pending.clear();s.error="接続が切れました\nPCで確認してください";
   }
-  powered_=powered;connected_=connected;battery_=std::clamp(battery,0,100);dirty_=true;refresh();
+  powered_=powered;connected_=connected;battery_=std::clamp(battery,0,100);charging_=charging;dirty_=true;refresh();
 }
 void CompactUi::button(char key,int phase) {
   if(key!='A' && key!='B' && key!='C')return;
@@ -354,6 +355,7 @@ void CompactUi::render() {
   lv_obj_set_style_local_border_color(frame_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(connected_?frame(status):0x4d5552));
   lv_label_set_text(icon_,connected_?icon(status):LV_SYMBOL_CLOSE);
   lv_obj_set_style_local_text_color(icon_,LV_LABEL_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(!connected_?0xa9b5af:status=="running"?0x63c583:(status=="waiting" || status=="failed")?0xd7969e:0xa9b5af));
+  lv_label_set_text(chargingLabel_,charging_?LV_SYMBOL_CHARGE:"");
   lv_label_set_text(batteryLabel_,(std::to_string(battery_)+"%").c_str());
   lv_label_set_text(counter_,listOpen_?(sessions_.empty()?"0/0":(std::to_string(listFocus_+1)+"/"+std::to_string(sessions_.size())).c_str()):("? "+std::to_string(waitingCount())).c_str());
   lv_obj_set_style_local_bg_color(nameBand_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(sessionBackground(!connected_ || listOpen_?"idle":status)));
@@ -405,6 +407,7 @@ std::string CompactUi::snapshot() const {
   d["state"]=s?s->status:"idle";d["uiId"]=s?s->uiId:"";d["sessionId"]=s?s->id:"";d["session"]=s?s->name:"";
   d["message"]=s?s->message:"";d["displayMessage"]=s?s->wrapped:"";
   d["choice"]=s?s->choice:0;d["pending"]=s?s->pending:"";d["acknowledged"]=s && s->acknowledged;d["error"]=s?s->error:"";
+  d["charging"]=charging_;d["battery"]=battery_;
   d["connected"]=connected_;d["powered"]=powered_;d["listOpen"]=listOpen_;d["listFocus"]=listFocus_;
   d["waitingCount"]=waitingCount();d["scrollPixels"]=s?s->scrollPixels:0;d["scrollSpeed"]=scrollSpeed;
   d["autoPaused"]=autoPause();d["selectedPriority"]=s?priority(*s):0;

@@ -12,11 +12,11 @@ void DeviceApplication::begin(const Hardware& hardware) {
   hello(Transport::usb);
 }
 void DeviceApplication::updateHardware() {
-  ui_.hardware(hardware_.powered,pairingScreenVisible_ || lease_.owner()!=Transport::none,hardware_.battery);
+  ui_.hardware(hardware_.powered,pairingScreenVisible_ || lease_.owner()!=Transport::none,hardware_.battery,hardware_.charging);
 }
 void DeviceApplication::hardware(const Hardware& hardware) {
   if(hardware.powered==hardware_.powered && hardware.sppReady==hardware_.sppReady &&
-     hardware.sppClient==hardware_.sppClient && hardware.battery==hardware_.battery &&
+     hardware.sppClient==hardware_.sppClient && hardware.battery==hardware_.battery && hardware.charging==hardware_.charging &&
      hardware.width==hardware_.width && hardware.height==hardware_.height && hardware.board==hardware_.board && hardware.bleReady==hardware_.bleReady && hardware.bleClient==hardware_.bleClient)return;
   const bool streamChanged=hardware.sppClient!=hardware_.sppClient ||
     hardware.sppReady!=hardware_.sppReady;
@@ -79,7 +79,7 @@ void DeviceApplication::hello(Transport link) const {
   document["bleReady"]=hardware_.bleReady;document["bleClient"]=hardware_.bleClient;
   document["bluetoothName"]=identity_.bluetoothName;document["sppReady"]=hardware_.sppReady;
   document["width"]=hardware_.width;document["height"]=hardware_.height;
-  document["board"]=hardware_.board;document["battery"]=hardware_.battery;
+  document["board"]=hardware_.board;document["battery"]=hardware_.battery;document["charging"]=hardware_.charging;
   pairingInfo(document);send(link,document);
 }
 std::string DeviceApplication::snapshot() const {
