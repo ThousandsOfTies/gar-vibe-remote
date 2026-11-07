@@ -126,6 +126,7 @@ bool CompactUi::choosing() const {
     (hasOptions(*s) || (!s->pending.empty() && !s->acknowledged));
 }
 const char* CompactUi::autoPause() const {
+  if(!voiceMessage_.empty())return "voice";
   if(!powered_)return "power";
   if(!connected_)return "connection";
   if(heldButtons_)return "button";
@@ -153,7 +154,7 @@ void CompactUi::autoSelect() {
      (notice_==Notice::completed && s->status!="idle" && s->status!="done"))) {
     notice_=Notice::none;dirty_=true;
   }
-  if(!powered_ || !connected_ || heldButtons_ || listOpen_ || choosing() || sessions_.empty())return;
+  if(!powered_ || !connected_ || heldButtons_ || listOpen_ || choosing() || !voiceMessage_.empty() || sessions_.empty())return;
   int best=-1;
   for(size_t i=0;i<sessions_.size();++i) {
     if(best<0 || priority(sessions_[i])>priority(sessions_[best]) ||
@@ -173,7 +174,7 @@ void CompactUi::autoSelect() {
   }
 }
 int CompactUi::waitingCount() const {
-  return std::count_if(sessions_.begin(),sessions_.end(),[this](const Session& s){return hasOptions(s);});
+  return std::count_if(sessions_.begin(),sessions_.end(),[this](const Session& s){return s.status=="waiting" && s.pending.empty();});
 }
 bool CompactUi::parseSession(JsonObjectConst object,Session& s) const {
   if(object.isNull())return false;
@@ -181,6 +182,7 @@ bool CompactUi::parseSession(JsonObjectConst object,Session& s) const {
   if(s.id.empty() || s.id.size()>256 || s.name.size()>512)return false;
   std::replace(s.name.begin(),s.name.end(),'\n',' ');std::replace(s.name.begin(),s.name.end(),'\r',' ');
   const auto ui=object["ui"].as<JsonObjectConst>();s.uiId=text(ui["id"]);
+  s.freeText=ui["freeText"]==true;
   s.status=s.uiId.empty()?text(object["agent"]["status"],"idle"):text(ui["state"],"waiting");
   s.message=s.uiId.empty()?text(object["agent"]["message"],"操作を待っています"):text(ui["message"]);
   if(s.uiId.size()>256 || s.message.size()>8192)return false;
@@ -198,7 +200,7 @@ bool CompactUi::parseSession(JsonObjectConst object,Session& s) const {
   return s.contentHeight<=30000; // Keep every LVGL 7 coordinate inside int16_t.
 }
 bool CompactUi::merge(Session& next,const Session& old) {
-  bool same=next.uiId==old.uiId && next.status==old.status && next.message==old.message && next.actions.size()==old.actions.size();
+  bool same=next.uiId==old.uiId && next.status==old.status && next.message==old.message && next.freeText==old.freeText && next.actions.size()==old.actions.size();
   for(size_t i=0;same && i<next.actions.size();++i)
     same=next.actions[i].id==old.actions[i].id && next.actions[i].label==old.actions[i].label && next.actions[i].button==old.actions[i].button;
   if(same) {
@@ -329,7 +331,19 @@ void CompactUi::button(char key,int phase) {
   }
   dirty_=true;refresh();
 }
+bool CompactUi::voiceTarget(std::string& session,std::string& ui) const {
+  const auto* s=current();
+  if(!powered_ || !connected_ || listOpen_ || !s || !s->freeText || s->status!="waiting" || s->uiId.empty() || !s->pending.empty())return false;
+  session=s->id;ui=s->uiId;return true;
+}
+bool CompactUi::voiceTargetValid(const std::string& session,const std::string& ui) const {
+  const int i=find(session);return powered_ && connected_ && i>=0 && sessions_[i].freeText && sessions_[i].status=="waiting" && sessions_[i].uiId==ui;
+}
+void CompactUi::voiceOverlay(const std::string& message,const std::string& footer) {
+  voiceMessage_=message;voiceFooter_=footer;voiceScroll_=0;dirty_=true;refresh();
+}
 void CompactUi::advanceScroll(uint32_t elapsed) {
+  if(!voiceMessage_.empty()){voiceScroll_+=elapsed;dirty_=true;return;}
   auto* s=current();
   if(!s || !powered_ || !connected_ || listOpen_ || heldButtons_ || !s->pending.empty() || !s->error.empty() ||
      notice_==Notice::received || notice_==Notice::completed)return;
@@ -361,7 +375,7 @@ void CompactUi::render() {
   lv_obj_set_style_local_bg_color(nameBand_,LV_OBJ_PART_MAIN,LV_STATE_DEFAULT,lv_color_hex(sessionBackground(!connected_ || listOpen_?"idle":status)));
   lv_label_set_text(name_,listOpen_?"セッション":shorten(s?(s->name.empty()?stateName(status):s->name):"待機中",textWidth-8).c_str());
   lv_obj_set_hidden(viewport_,listOpen_ && !sessions_.empty());
-  const bool options=!listOpen_ && s && canAnswer(*s);
+  const bool options=voiceMessage_.empty() && !listOpen_ && s && canAnswer(*s);
   for(int i=0;i<2;++i) {
     const int first=s?(s->choice/2)*2:0;const int index=first+i;
     const bool show=options && index<(int)s->actions.size();
@@ -389,7 +403,13 @@ void CompactUi::render() {
   } else if(!listOpen_) {
     const int height=options?questionHeight:fullHeight;lv_obj_set_height(viewport_,height);
     std::string body;int y=0;
-    if(!s)body="セッションを\n待っています";
+    if(!voiceMessage_.empty()) {
+      body=wrap(voiceMessage_,textWidth);
+      const int maximum=std::max(0,(1+(int)std::count(body.begin(),body.end(),'\n'))*vibe_jp_16.line_height-fullHeight);
+      const uint64_t travel=(uint64_t(maximum)*1000+scrollSpeed-1)/scrollSpeed,position=voiceScroll_%(1800+travel+2800);
+      y=-int(position<=1800?0:std::min<uint64_t>(maximum,(position-1800)*scrollSpeed/1000));
+    }
+    else if(!s)body="セッションを\n待っています";
     else if(!connected_)body="PCとの接続が\nありません";
     else if(notice_==Notice::received)body="PCが回答を\n受信しました";
     else if(notice_==Notice::completed)body=wrap(s->status=="done"?"作業が完了しました":"待機中になりました",textWidth);
@@ -399,13 +419,14 @@ void CompactUi::render() {
     lv_label_set_text(body_,body.c_str());
     lv_obj_set_height(body_,std::max(height,(1+(int)std::count(body.begin(),body.end(),'\n'))*vibe_jp_16.line_height));
     lv_obj_set_y(body_,y);
-    lv_label_set_text(footer_,options?hints_.choices.c_str():hints_.list.c_str());
+    lv_label_set_text(footer_,!voiceMessage_.empty()?voiceFooter_.c_str():s && s->freeText?"A長押し:録音":options?hints_.choices.c_str():hints_.list.c_str());
   } else lv_label_set_text(footer_,hints_.next.c_str());
 }
 std::string CompactUi::snapshot() const {
   JsonDocument d;const auto* s=current();
   d["state"]=s?s->status:"idle";d["uiId"]=s?s->uiId:"";d["sessionId"]=s?s->id:"";d["session"]=s?s->name:"";
   d["message"]=s?s->message:"";d["displayMessage"]=s?s->wrapped:"";
+  d["freeText"]=s && s->freeText;d["voiceMessage"]=voiceMessage_;
   d["choice"]=s?s->choice:0;d["pending"]=s?s->pending:"";d["acknowledged"]=s && s->acknowledged;d["error"]=s?s->error:"";
   d["charging"]=charging_;d["battery"]=battery_;
   d["connected"]=connected_;d["powered"]=powered_;d["listOpen"]=listOpen_;d["listFocus"]=listFocus_;

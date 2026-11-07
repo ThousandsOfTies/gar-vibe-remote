@@ -37,6 +37,30 @@ const question = (sessionId: string, id = 'same-native-question') => ({
   failed: []
 });
 
+test('free-text voice replies are isolated by session, current UI and source, with no approval fallback', () => {
+  const hub = new CodexSessions(config);
+  hub.sync(roster());
+  const payload = (id: string) => ({
+    ...question(id),
+    questions: [{ id: 'same-free-question', question: '寸法は？', options: [], freeText: true }]
+  });
+  hub.syncQuestions(payload('a'));
+  hub.syncQuestions(payload('b'));
+  const [a, b] = hub.state().sessions;
+  assert.equal(a.ui!.state, 'waiting');
+  assert.equal(a.ui!.freeText, true);
+  assert.equal(hub.answer('b', a.ui!.id, 'voice', 'isolated-physical-test', '10cm'), false);
+  assert.equal(hub.answer('a', a.ui!.id, 'voice', 'untrusted', '10cm'), false);
+  assert.equal(hub.answer('a', a.ui!.id, 'voice', 'isolated-physical-test', ''), false);
+  assert.equal(hub.answer('a', a.ui!.id, 'yes', 'isolated-physical-test', '10cm'), false);
+  assert.equal(hub.answer('a', a.ui!.id, 'voice', 'isolated-physical-test', '10cm'), true);
+  assert.equal(hub.answer('a', a.ui!.id, 'voice', 'isolated-physical-test', '20cm'), false);
+  assert.equal(hub.syncQuestions(payload('a')).answers[0].text, '10cm');
+  assert.equal(hub.state().sessions[1].ui!.id, b.ui!.id);
+  hub.sync(roster([row('b')]));
+  assert.equal(hub.answer('a', a.ui!.id, 'voice', 'isolated-physical-test', '10cm'), false);
+});
+
 test('identical native question ids in separate chats require both session and UI identities', () => {
   const hub = new CodexSessions(config);
   hub.sync(roster());

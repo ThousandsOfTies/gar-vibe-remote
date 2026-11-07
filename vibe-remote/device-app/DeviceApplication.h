@@ -4,6 +4,8 @@
 #include "CompactUi.h"
 #include "DeviceLink.h"
 #include "PairingConsent.h"
+#include "VoiceInput.h"
+#include <memory>
 
 namespace vibe {
 // Application runtime shared by ESP32 and the PC simulator. The platform owns
@@ -32,13 +34,16 @@ class DeviceApplication {
   void resetTransport(Transport link);
   void discardTransport(Transport link);
   void button(char key,int phase);
+  void enableVoice(int16_t* buffer,size_t capacity,VoiceInput::Mic mic);
+  void voiceAudio(const int16_t* pcm,size_t count) {if(voice_)voice_->audio(pcm,count,lv_tick_get());}
   void pairingRequested(uint32_t number);
   void authenticated(bool success);
-  bool allSessionsIdle() const {return !pairing_.active() && ui_.allSessionsIdle();}
+  bool allSessionsIdle() const {return !(voice_ && voice_->active()) && !pairing_.active() && ui_.allSessionsIdle();}
   void step();
   std::string snapshot() const;
  private:
   vibe::CompactUi ui_;
+  std::unique_ptr<VoiceInput> voice_;
   JsonLines usbLines_,sppLines_,bleLines_;
   DeviceLease lease_;
   PairingConsent pairing_;

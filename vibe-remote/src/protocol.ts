@@ -38,6 +38,8 @@ export interface DeviceUiField {
 }
 
 export interface DeviceUiSpec {
+  /** Ordinary free-text question; never an execution approval. */
+  freeText?: boolean;
   id: string;
   title?: string;
   state?: DeviceUiState;
@@ -69,6 +71,7 @@ export interface ClearDeviceUiMessage {
 
 /** デバイス → 拡張：小型UI上のアクション選択 */
 export interface UiActionMessage {
+  text?: string;
   type: 'uiAction';
   token: string;
   uiId: string;

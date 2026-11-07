@@ -3,6 +3,8 @@ import { InteractionError } from './codexInteraction';
 import type { DeviceUiSpec } from './protocol';
 
 interface Question {
+  freeText?: boolean;
+  text?: string;
   id: string;
   uiId: string;
   question: string;
@@ -76,7 +78,8 @@ export class CodexChatQuestions {
         q.question.split('\n').length > 200 ||
         /\p{Cc}/u.test(q.question.replace(/[\n\t]/g, '')) ||
         !Array.isArray(q.options) ||
-        q.options.length < 2 ||
+        (q.freeText === true ? q.options.length !== 0 : q.options.length < 2) ||
+        (q.freeText !== undefined && typeof q.freeText !== 'boolean') ||
         q.options.length > 8 ||
         next.has(q.id)
       )
@@ -100,6 +103,7 @@ export class CodexChatQuestions {
       if (
         existing &&
         (existing.question !== q.question ||
+          existing.freeText !== (q.freeText === true) ||
           JSON.stringify(existing.options) !== JSON.stringify(q.options))
       )
         throw new InteractionError(409, 'A question id cannot be reused with different content');
@@ -108,6 +112,7 @@ export class CodexChatQuestions {
         uiId: `chat-choice-${randomBytes(16).toString('hex')}`,
         question: q.question,
         options: q.options,
+        freeText: q.freeText === true,
         status: 'pending',
         updatedAt: this.now()
       };
@@ -135,12 +140,13 @@ export class CodexChatQuestions {
         .map((q) => ({
           id: q.id,
           choiceId: q.choiceId,
+          ...(q.freeText ? { text: q.text } : {}),
           source: q.source
         }))
     };
   }
 
-  answer(uiId: unknown, choiceId: unknown, source: unknown) {
+  answer(uiId: unknown, choiceId: unknown, source: unknown, text?: unknown) {
     this.refresh();
     const q = this.current();
     if (
@@ -150,11 +156,18 @@ export class CodexChatQuestions {
       typeof source !== 'string' ||
       !Array.isArray(this.options.chatQuestionSources) ||
       !this.options.chatQuestionSources.includes(source) ||
-      !q.options.some((option) => option.id === choiceId)
+      !(q.freeText
+        ? choiceId === 'voice' &&
+          typeof text === 'string' &&
+          text.trim() &&
+          Buffer.byteLength(text) <= 2000 &&
+          !/[\p{Cc}]/u.test(text)
+        : text === undefined && q.options.some((option) => option.id === choiceId))
     )
       return false;
     q.status = 'selected';
     q.choiceId = choiceId as string;
+    if (q.freeText) q.text = (text as string).trim();
     q.source = source;
     q.updatedAt = this.now();
     return true;
@@ -179,6 +192,7 @@ export class CodexChatQuestions {
       title: '',
       source: 'chat-choice',
       mode: 'menu',
+      freeText: q.freeText && q.status === 'pending',
       state: q.status === 'delivered' ? 'done' : q.status === 'failed' ? 'idle' : 'waiting',
       message:
         q.status === 'pending'

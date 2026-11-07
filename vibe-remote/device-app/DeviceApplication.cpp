@@ -29,6 +29,7 @@ void DeviceApplication::hardware(const Hardware& hardware) {
   }
   if(bleChanged){bleLines_.reset();lease_.release(Transport::ble);}
   if(poweredOff) {
+    if(voice_)voice_->cancel();
     usbLines_.reset();sppLines_.reset();bleLines_.reset();lease_.release(Transport::usb);lease_.release(Transport::spp);lease_.release(Transport::ble);
     for(char key:std::string("ABC"))ui_.button(key,-1);
   }
@@ -84,6 +85,7 @@ void DeviceApplication::hello(Transport link) const {
 }
 std::string DeviceApplication::snapshot() const {
   JsonDocument document;deserializeJson(document,ui_.snapshot());
+  document["voiceState"]=voice_?voice_->state():"disabled";
   document["activeTransport"]=name(lease_.owner());document["sppReady"]=hardware_.sppReady;
   document["sppClient"]=hardware_.sppClient;document["bleReady"]=hardware_.bleReady;document["bleClient"]=hardware_.bleClient;pairingInfo(document);
   std::string packet;serializeJson(document,packet);return packet;
@@ -108,6 +110,7 @@ void DeviceApplication::receive(Transport link,const std::string& packet) {
   }
   if(type=="ping") { if(lease_.renew(link,lv_tick_get()))updateHardware();return; }
   if(link!=lease_.owner())return;
+  if(voice_)voice_->receive(document.as<JsonObjectConst>(),lv_tick_get());
   if(type=="state" || type=="sessions" || type=="ack") {
     if(ui_.receive(packet.c_str())) { lease_.renew(link,lv_tick_get());updateHardware(); }
   }
@@ -130,6 +133,13 @@ void DeviceApplication::discardTransport(Transport link) {
   if(link==Transport::usb)usbLines_.discard();else if(link==Transport::spp)sppLines_.discard();else if(link==Transport::ble)bleLines_.discard();
 }
 void DeviceApplication::button(char key,int phase) {
+  if(voice_ && hardware_.powered && !pairing_.active()) {
+    if(key=='V' && phase==1 && !voice_->active() && lease_.owner()!=Transport::none) {
+      std::string session,ui;if(ui_.voiceTarget(session,ui))voice_->start(session,ui,lv_tick_get());
+      return;
+    }
+    if(voice_->active()){voice_->input(key,phase,lv_tick_get());return;}
+  }
   if(!hardware_.powered || (key!='A' && key!='B' && key!='C'))return;
   ui_.button(key,phase);
   if((phase==0 || phase==1) && !pairing_.active() && lease_.owner()!=Transport::none) {
@@ -137,8 +147,13 @@ void DeviceApplication::button(char key,int phase) {
     document["phase"]=phase?"down":"up";send(lease_.owner(),document);
   }
 }
+void DeviceApplication::enableVoice(int16_t* buffer,size_t capacity,VoiceInput::Mic mic) {
+  voice_.reset(new VoiceInput(buffer,capacity,[this](const JsonDocument& d){send(lease_.owner(),d);},std::move(mic),
+    [this](const std::string& text,const std::string& footer){ui_.voiceOverlay(text,footer);}));
+}
 void DeviceApplication::step() {
   if(!hardware_.powered)return;
+  if(voice_)voice_->tick(lv_tick_get(),!pairing_.active() && lease_.owner()!=Transport::none && ui_.voiceTargetValid(voice_->session(),voice_->ui()));
   const bool awaiting=pairing_.confirming();
   if(pairing_.expire(lv_tick_get())) {
     if(awaiting)confirm_(false);

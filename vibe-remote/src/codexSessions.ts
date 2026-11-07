@@ -152,11 +152,11 @@ export class CodexSessions {
     if (!entry) throw new InteractionError(404, 'The question session is no longer monitored');
     return entry.questions.sync(payload);
   }
-  answer(sessionId: unknown, uiId: unknown, actionId: unknown, source: unknown) {
+  answer(sessionId: unknown, uiId: unknown, actionId: unknown, source: unknown, text?: unknown) {
     this.refresh();
     return (
       typeof sessionId === 'string' &&
-      (this.entries.get(sessionId)?.questions.answer(uiId, actionId, source) ?? false)
+      (this.entries.get(sessionId)?.questions.answer(uiId, actionId, source, text) ?? false)
     );
   }
   state(): SessionsMessage {

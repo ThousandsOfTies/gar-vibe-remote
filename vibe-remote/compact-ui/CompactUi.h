@@ -18,6 +18,9 @@ class CompactUi {
   bool receive(const char* json);
   void hardware(bool powered, bool connected, int battery, bool charging=false);
   void button(char key, int phase); // 1 down, 0 up, -1 cancel
+  bool voiceTarget(std::string& session,std::string& ui) const;
+  bool voiceTargetValid(const std::string& session,const std::string& ui) const;
+  void voiceOverlay(const std::string& message,const std::string& footer);
   bool allSessionsIdle() const {
     if(sessions_.empty())return false;
     for(const auto& s:sessions_)if(s.status!="idle" || !s.pending.empty())return false;
@@ -28,6 +31,8 @@ class CompactUi {
   std::string takeAction();
  private:
   InputHints hints_;
+  std::string voiceMessage_,voiceFooter_;
+  uint64_t voiceScroll_=0;
   struct Action { std::string id, label, button; };
   struct Session {
     std::string id, name, uiId, status="idle", message, wrapped, pending, error;
@@ -36,6 +41,7 @@ class CompactUi {
     uint64_t scrollTime=0;
     uint64_t waitingOrder=0;
     bool acknowledged=false;
+    bool freeText=false;
   };
   struct Outgoing { std::string sessionId, json; };
   static constexpr int maxSessions=16, maxActions=8, scrollSpeed=9;

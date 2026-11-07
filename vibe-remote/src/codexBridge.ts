@@ -260,6 +260,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
           sessionId?: string;
           actionId?: string;
           source?: string;
+          text?: unknown;
         };
         if (!authenticated(message.token)) {
           socket.send(JSON.stringify({ type: 'ack', ok: false, error: '認証に失敗しました' }));
@@ -271,7 +272,8 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
             message.sessionId,
             message.uiId,
             message.actionId,
-            message.source
+            message.source,
+            message.text
           );
           socket.send(JSON.stringify({ type: 'ack', ok }));
           broadcast();
@@ -280,7 +282,7 @@ export async function startCodexBridge(options: CodexBridgeOptions) {
         if (
           message.type === 'uiAction' &&
           clients.has(socket) &&
-          chatQuestions.answer(message.uiId, message.actionId, message.source)
+          chatQuestions.answer(message.uiId, message.actionId, message.source, message.text)
         ) {
           socket.send(JSON.stringify({ type: 'ack', ok: true }));
           broadcast();
