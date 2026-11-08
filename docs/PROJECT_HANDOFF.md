@@ -1,6 +1,6 @@
 # Vibe Remote — Current Handoff
 
-更新日：2026-10-26。
+更新日：2026-11-01。
 
 ## 現在の対象
 
@@ -15,9 +15,10 @@ Cで選択、Aを押して離すと決定、Bでセッション一覧／戻る�
 - [CompactUi](../vibe-remote/compact-ui/README.md)：実機とWASMで共通の画面・操作。
 - [VS Code連携](../vibe-remote/README.md)：別の任意機能。Codex Productの導入には不要。
 
-実機ファームウェアはProductの`firmware/stickc-plus2/`です。
-`DeviceLink.h`がJSON Lines・操作権・接続期限、`PairingConsent.h`が番号照合の状態を扱い、
-画面・スクロール・ボタン操作は共有`compact-ui/`で扱います。
+実機・PC共通の`DeviceApplication`、JSON Lines・所有権・期限の`DeviceLink.h`、
+番号照合の`PairingConsent.h`は共有`vibe-remote/device-app/`に置きます。
+画面・スクロール・ボタン操作は共有`compact-ui/`です。基板初期化や端子番号は持ちません。
+Productの`firmware/stickc-plus2/`は独立した基板repoのI/Oとアプリをcallbackで組み合わせます。
 
 PC側の実機中継、チャット収集、質問処理、閲覧用配信、静的HTTP配信はProductの別処理です。
 共有Appのサーバーからそれらを起動したり、Hookを変更したりしません。

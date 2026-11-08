@@ -21,6 +21,7 @@ PC内の認証付きWebSocketは、状態ブリッジ・実機中継・閲覧用
 - `vibe-remote/src/codexBridge.ts`：localhostのHTTP／WebSocketサーバー。
 - `vibe-remote/src/codexStatus.ts`、`codexSessions.ts`、`codexChatQuestions.ts`：状態・複数チャット・質問の管理。
 - `vibe-remote/compact-ui/`：Plus2実機とWebAssemblyで共通のLVGL画面。
+- `vibe-remote/device-app/`：実機／PC共通のJSONL・接続所有権・ペアリング確認・回答処理。基板名や端子番号は持たず、Productから設定とI/Oを受け取ります。
 - `vibe-remote/touch-ui/`：旧タッチUIと、CompactUiが共有する日本語フォント。
 - `vibe-remote/src/extension.ts`：任意のVS Code拡張。PC内の状態ビューアとSPP接続。
 - `docs/PROJECT_HANDOFF.md`：共有コードとProductの責務・作業入口。
